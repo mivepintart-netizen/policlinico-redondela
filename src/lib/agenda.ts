@@ -53,7 +53,7 @@ export function esFestivo(iso: string) {
 
 /* ----- Ocupación ficticia, estable para el mismo día/hora ----- */
 
-function hash(texto: string) {
+export function hash(texto: string) {
   let h = 2166136261;
   for (let i = 0; i < texto.length; i++) {
     h ^= texto.charCodeAt(i);
@@ -62,7 +62,7 @@ function hash(texto: string) {
   return (h >>> 0) % 100;
 }
 
-function estaOcupado(profesionalId: string, iso: string, hora: string) {
+export function estaOcupado(profesionalId: string, iso: string, hora: string) {
   return hash(`${profesionalId}|${iso}|${hora}`) < 38;
 }
 

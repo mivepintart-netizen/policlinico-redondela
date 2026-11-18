@@ -153,7 +153,7 @@ function escribir(clave: string, valor: unknown) {
 
 /* ----- API ----- */
 
-function todas(ahora: Date): ReservaDemo[] {
+export function todas(ahora: Date): ReservaDemo[] {
   const cambios = leer<Record<string, Partial<ReservaDemo>>>(CLAVE_CAMBIOS, {});
   const lista = [...ejemplos(ahora), ...leer<ReservaDemo[]>(CLAVE_NUEVAS, [])];
   return lista.map((r) => ({ ...r, ...cambios[r.token] }));
