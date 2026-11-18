@@ -155,7 +155,10 @@ export function PasoFecha({
   hueco,
   onFecha,
   onHueco,
+  encabezado = true,
 }: {
+  /** false para usarlo dentro de otra página con su propio título */
+  encabezado?: boolean;
   ahora: Date;
   especialidadId: string;
   profesionalId: string | null;
@@ -207,7 +210,7 @@ export function PasoFecha({
 
   return (
     <>
-      <TituloPaso titulo="Elige día y hora" texto="Los días marcados tienen huecos libres." />
+      {encabezado && <TituloPaso titulo="Elige día y hora" texto="Los días marcados tienen huecos libres." />}
       <div className="grid gap-6 xl:grid-cols-2">
         <Calendario ahora={ahora} seleccionada={fecha} huecosPorDia={(iso) => obtener(iso).length} onElegir={onFecha} />
 

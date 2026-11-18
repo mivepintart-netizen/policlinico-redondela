@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { especialidades, formatoEuros, profesionales } from "@/lib/datos";
 import type { Hueco } from "@/lib/agenda";
+import { guardarNueva } from "@/lib/reservasDemo";
 import BarraPasos from "./BarraPasos";
 import Resumen from "./Resumen";
 import Confirmacion from "./Confirmacion";
@@ -24,6 +25,7 @@ export default function Asistente({ especialidadInicial }: { especialidadInicial
   const [mostrarErrores, setMostrarErrores] = useState(false);
   const [pagando, setPagando] = useState(false);
   const [codigo, setCodigo] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
   // La fecha actual solo se conoce en el navegador (evita desajustes con el servidor)
   const [ahora, setAhora] = useState<Date | null>(null);
@@ -69,7 +71,33 @@ export default function Asistente({ especialidadInicial }: { especialidadInicial
     setPagando(true);
     // Simulación de pasarela de pago
     setTimeout(() => {
-      setCodigo(`RDN-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`);
+      const nuevoCodigo = `RDN-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
+      const nuevoToken =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+      const { datos } = estado;
+      // Versión de prueba: se guarda en el navegador para verla en Mi zona
+      guardarNueva({
+        id: nuevoCodigo,
+        token: nuevoToken,
+        especialidadId: estado.especialidadId!,
+        profesionalId: estado.hueco!.profesionalId,
+        fecha: estado.fecha!,
+        hora: estado.hueco!.hora,
+        estado: "confirmada",
+        reembolso: false,
+        metodoPago: estado.metodoPago,
+        paciente: {
+          nombre: datos.nombre.trim(),
+          apellidos: datos.apellidos.trim(),
+          email: datos.email.trim().toLowerCase(),
+          telefono: datos.telefono.trim(),
+        },
+        creadaEl: new Date().toISOString(),
+      });
+      setToken(nuevoToken);
+      setCodigo(nuevoCodigo);
       setPagando(false);
     }, 1200);
   };
@@ -107,7 +135,7 @@ export default function Asistente({ especialidadInicial }: { especialidadInicial
   if (codigo) {
     return (
       <div ref={arriba} className="scroll-mt-24 py-6">
-        <Confirmacion estado={estado} codigo={codigo} />
+        <Confirmacion estado={estado} codigo={codigo} token={token} />
       </div>
     );
   }

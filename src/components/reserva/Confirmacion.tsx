@@ -4,7 +4,15 @@ import { contacto, especialidades, formatoEuros, profesionales } from "@/lib/dat
 import { AvisoCancelacion } from "./Resumen";
 import type { EstadoReserva } from "./tipos";
 
-export default function Confirmacion({ estado, codigo }: { estado: EstadoReserva; codigo: string }) {
+export default function Confirmacion({
+  estado,
+  codigo,
+  token,
+}: {
+  estado: EstadoReserva;
+  codigo: string;
+  token: string | null;
+}) {
   const esp = especialidades.find((e) => e.id === estado.especialidadId)!;
   const prof = profesionales.find((p) => p.id === estado.hueco!.profesionalId)!;
   const { fecha, hueco, datos } = estado;
@@ -73,7 +81,7 @@ export default function Confirmacion({ estado, codigo }: { estado: EstadoReserva
       </p>
 
       <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-        <Link href="/mi-zona" className="rounded-xl bg-brand-500 px-6 py-3 font-semibold text-white transition hover:bg-brand-600">
+        <Link href={token ? `/mi-zona/cita/${token}` : "/mi-zona"} className="rounded-xl bg-brand-500 px-6 py-3 font-semibold text-white transition hover:bg-brand-600">
           Gestionar mi cita
         </Link>
         <Link href="/" className="rounded-xl border border-linea bg-white px-6 py-3 font-medium transition hover:border-brand-200">
