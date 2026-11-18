@@ -8,9 +8,9 @@ import { contacto, formatoEuros } from "../datos";
 import type { FilaReserva } from "../database.types";
 import { supabaseAdmin } from "./admin";
 
-export type TipoEmail = "confirmacion" | "cambio" | "cancelacion";
+export type TipoEmail = "confirmacion" | "cambio" | "cancelacion" | "recordatorio";
 
-const REMITENTE = () => process.env.EMAIL_REMITENTE || "Policlínico Redondela <onboarding@resend.dev>";
+export const REMITENTE = () => process.env.EMAIL_REMITENTE || "Policlínico Redondela <onboarding@resend.dev>";
 
 export const hayEmail = () => !!process.env.RESEND_API_KEY;
 
@@ -50,6 +50,11 @@ export function plantillaEmail(opts: {
       titulo: "Hemos cambiado tu cita",
       intro: `Hola ${nombre}, estos son los nuevos datos de tu cita.`,
     },
+    recordatorio: {
+      asunto: `Recordatorio: mañana a las ${r.hora}, ${opts.especialidad}`,
+      titulo: `Te esperamos mañana a las ${r.hora}`,
+      intro: `Hola ${nombre}, te recordamos tu cita en el Policlínico Redondela. Si no puedes venir, avísanos para que otra persona pueda aprovechar el hueco.`,
+    },
     cancelacion: {
       asunto: `Cita cancelada: ${opts.especialidad}, ${cuando}`,
       titulo: "Tu cita está cancelada",
@@ -83,13 +88,19 @@ export function plantillaEmail(opts: {
 
   const limite = new Date(momento(r.fecha, r.hora).getTime() - 24 * 3600 * 1000);
   const politica =
-    tipo !== "cancelacion"
+    tipo === "recordatorio"
+      ? `<p style="margin:20px 0 0;color:#4A6670;font-size:14px;line-height:1.5">Llega 5 minutos antes. Si necesitas cambiar o cancelar, hazlo desde el botón de abajo o llámanos al ${contacto.telefono}.</p>`
+      : tipo !== "cancelacion"
       ? `<p style="margin:20px 0 0;color:#4A6670;font-size:14px;line-height:1.5">Puedes cambiar o cancelar gratis hasta el <strong>${limite.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })} a las ${r.hora}</strong>. Después, el anticipo no se devuelve.</p>`
       : "";
 
   const boton =
     tipo !== "cancelacion"
-      ? `<a href="${enlace}" style="display:inline-block;margin-top:24px;background:#0D7C8A;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 22px;border-radius:12px">Ver, cambiar o cancelar mi cita</a>`
+      ? `<a href="${enlace}" style="display:inline-block;margin-top:24px;background:#0D7C8A;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 22px;border-radius:12px">Ver, cambiar o cancelar mi cita</a>${
+          tipo === "recordatorio"
+            ? `<br><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${contacto.direccion}, ${contacto.codigoPostal} ${contacto.localidad}`)}" style="display:inline-block;margin-top:12px;color:#0D7C8A;font-size:14px;font-weight:600">Cómo llegar →</a>`
+            : ""
+        }`
       : `<a href="${enlace.replace(/\/mi-zona\/cita\/.*/, "/reservar")}" style="display:inline-block;margin-top:24px;background:#0D7C8A;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 22px;border-radius:12px">Reservar otra cita</a>`;
 
   const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(t.asunto)}</title></head>
@@ -215,7 +226,7 @@ export async function enviarEmailCita(tipo: TipoEmail, reservaId: string, origen
       html,
       text: texto,
       attachments:
-        tipo === "cancelacion"
+        tipo === "cancelacion" || tipo === "recordatorio"
           ? undefined
           : [{ filename: `cita-${r.id}.ics`, content: Buffer.from(ics(r, especialidad, duracionMin, enlace)).toString("base64") }],
     });

@@ -12,7 +12,7 @@ import { mensajeError, supabaseNavegador } from "@/lib/supabase/cliente";
  * modificar nada.
  */
 
-export type NuevaReservaPanel = Omit<ReservaPanel, "id" | "token" | "creadaEl" | "reembolso" | "pagoRef" | "pagoOnline" | "expiraEn">;
+export type NuevaReservaPanel = Omit<ReservaPanel, "id" | "token" | "creadaEl" | "reembolso" | "pagoRef" | "pagoOnline" | "expiraEn" | "recordatorioAt">;
 
 type Resultado = string | null; // null = sin error; texto = mensaje de error
 

@@ -6,6 +6,7 @@ import type { Especialidad } from "@/lib/catalogo";
 import { usePanel } from "./PanelProvider";
 import { Cabecera, Toast, btn, claseCampoBase } from "./ui";
 import AjustesPago from "./AjustesPago";
+import AjustesRecordatorios from "./AjustesRecordatorios";
 
 type Campo = "duracionMin" | "precio" | "deposito";
 
@@ -64,6 +65,7 @@ export default function Especialidades() {
       </Cabecera>
 
       <AjustesPago onAviso={setAviso} />
+      <AjustesRecordatorios onAviso={setAviso} />
 
       <div className="space-y-2">
         <div className="hidden grid-cols-[1.5fr_1fr_1fr_1fr_1fr_auto] gap-3 px-4 text-xs font-medium text-tinta-tenue md:grid">

@@ -35,6 +35,7 @@ export type ReservaPanel = {
   /** true si la reserva se hizo con cobro online activado */
   pagoOnline: boolean;
   expiraEn: string | null;
+  recordatorioAt: string | null;
 };
 
 export type SesionPanel = { id: string; email: string; nombre: string; rol: RolPanel };
@@ -88,6 +89,7 @@ export const desdeFila = (f: FilaReserva): ReservaPanel => ({
   pagoRef: f.pago_ref,
   pagoOnline: !!f.pago_sesion,
   expiraEn: f.expira_en,
+  recordatorioAt: f.recordatorio_at ?? null,
 });
 
 /** Cambios de la aplicación → columnas de la tabla. */

@@ -24,5 +24,7 @@ export async function GET() {
     webhookConfigurado: !!webhook,
     claveSecretaSupabase: await claveSecretaFunciona(),
     claveSecretaConfigurada: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+    email: !!process.env.RESEND_API_KEY,
+    cron: !!process.env.CRON_SECRET,
   });
 }

@@ -252,6 +252,12 @@ export default function DetalleReserva({
         <p className="text-xs text-tinta-tenue">
           {r.origen === "web" ? "Reservada por el paciente en la web" : "Creada desde el panel"} el{" "}
           {new Date(r.creadaEl).toLocaleDateString("es-ES", { day: "numeric", month: "long" })}.
+          {r.recordatorioAt && (
+            <>
+              {" "}Recordatorio enviado el{" "}
+              {new Date(r.recordatorioAt).toLocaleString("es-ES", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}.
+            </>
+          )}
         </p>
       </div>
     </Cajon>
