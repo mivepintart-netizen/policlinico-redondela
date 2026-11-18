@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { IconoCruz } from "@/components/Logo";
+import CambiarClave from "./CambiarClave";
 import { usePanel } from "./PanelProvider";
 
 type Item = { href: string; texto: string; soloAdmin?: boolean; icono: React.ReactNode };
@@ -13,6 +14,7 @@ const MENU: Item[] = [
   { href: "/panel/reservas", texto: "Reservas", icono: <><path d="M8 6h13M8 12h13M8 18h13" /><circle cx="3.5" cy="6" r="1" /><circle cx="3.5" cy="12" r="1" /><circle cx="3.5" cy="18" r="1" /></> },
   { href: "/panel/profesionales", texto: "Profesionales", soloAdmin: true, icono: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6" /></> },
   { href: "/panel/especialidades", texto: "Especialidades y precios", soloAdmin: true, icono: <><path d="M20 12.5 12.5 20a2 2 0 0 1-2.8 0L3 13.3V3h10.3l6.7 6.7a2 2 0 0 1 0 2.8Z" /><circle cx="7.5" cy="7.5" r="1.5" /></> },
+  { href: "/panel/usuarios", texto: "Usuarios", soloAdmin: true, icono: <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></> },
   { href: "/panel/festivos", texto: "Festivos", icono: <><path d="M12 3v2M12 19v2M5 12H3M21 12h-2M6.3 6.3 4.9 4.9M19.1 19.1l-1.4-1.4M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4" /><circle cx="12" cy="12" r="4" /></> },
 ];
 
@@ -29,6 +31,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const ruta = usePathname();
   const [menuAbierto, setMenuAbierto] = useState(false);
+  const [cambiandoClave, setCambiandoClave] = useState(false);
   const saliendo = useRef(false);
 
   useEffect(() => {
@@ -75,6 +78,14 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             <span className="block text-xs capitalize text-brand-200">{sesion.rol}</span>
           </span>
         </div>
+        <button
+          type="button"
+          onClick={() => setCambiandoClave(true)}
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-brand-100 transition hover:bg-white/5 hover:text-white"
+        >
+          <Icono><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></Icono>
+          Cambiar mi contraseña
+        </button>
         <Link href="/reservar" target="_blank" className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-brand-100 transition hover:bg-white/5 hover:text-white">
           <Icono><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></Icono>
           Ver página de reserva
@@ -132,6 +143,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       {menuAbierto && (
         <div className="fixed inset-x-0 bottom-0 top-14 z-40 flex flex-col bg-brand-900 lg:hidden">{navegacion}</div>
       )}
+
+      <CambiarClave abierto={cambiandoClave} onCerrar={() => setCambiandoClave(false)} />
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         {permitido ? (
