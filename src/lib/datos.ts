@@ -16,6 +16,22 @@ export const contacto = {
   recepcionista: "María",
 };
 
+/**
+ * Datos legales del titular de la web. ⚠️ Rellenar con los datos reales:
+ * los textos entre corchetes se muestran resaltados en las páginas legales.
+ */
+export const legal = {
+  titular: "[RAZÓN SOCIAL DEL POLICLÍNICO]",
+  cif: "[CIF]",
+  domicilio: "Rúa do Viaduto, 14, 36800 Redondela (Pontevedra)",
+  registro: "[Datos de inscripción en el Registro Mercantil, si es sociedad]",
+  autorizacionSanitaria: "[Nº de registro de centro sanitario de la Xunta de Galicia]",
+  emailPrivacidad: "[email para protección de datos]",
+  delegadoProteccionDatos: "[Nombre o empresa del Delegado de Protección de Datos, si lo hay]",
+  regionServidores: "[Región de Supabase: Settings → General, p. ej. «Unión Europea (Irlanda)»]",
+  actualizado: "noviembre de 2026",
+};
+
 /** Franjas de cada turno. Deben coincidir con es_hueco_valido() en la base de datos. */
 export const turnos = {
   m: { inicio: "09:00", fin: "14:00" },

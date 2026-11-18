@@ -9,6 +9,11 @@ export default function Footer() {
           {contacto.localidad} ·{" "}
           <a href={`tel:${contacto.telefonoHref}`} className="hover:text-brand-600">{contacto.telefono}</a>
         </p>
+        <nav aria-label="Textos legales" className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+          <a href="/legal/cancelacion" className="hover:text-brand-600">Reserva y cancelación</a>
+          <a href="/legal/privacidad" className="hover:text-brand-600">Privacidad</a>
+          <a href="/legal/aviso-legal" className="hover:text-brand-600">Aviso legal</a>
+        </nav>
         <p className="text-xs text-tinta-tenue">
           Desarrollado por <span className="font-medium text-tinta-suave">MV Automatizaciones</span>
         </p>

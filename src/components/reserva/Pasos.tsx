@@ -418,8 +418,8 @@ export function PasoDatos({
               className="mt-0.5 h-5 w-5 shrink-0 accent-brand-500"
             />
             <span className="text-sm text-tinta-suave">
-              Acepto la <a href="#" className="font-medium text-brand-600 underline">política de privacidad</a> y la{" "}
-              <a href="#" className="font-medium text-brand-600 underline">política de cancelación</a>: el anticipo se
+              Acepto la <a href="/legal/privacidad" target="_blank" rel="noopener" className="font-medium text-brand-600 underline">política de privacidad</a> y la{" "}
+              <a href="/legal/cancelacion" target="_blank" rel="noopener" className="font-medium text-brand-600 underline">política de cancelación</a>: el anticipo se
               devuelve si cancelo con al menos 24 horas de antelación.
             </span>
           </label>
