@@ -1,0 +1,88 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { supabaseNavegador } from "@/lib/supabase/cliente";
+
+type Estado = { stripe: "prueba" | "real" | null; webhook: boolean; claveSecretaSupabase: boolean };
+
+/** Interruptor del cobro online del anticipo (solo admin). */
+export default function AjustesPago({ onAviso }: { onAviso: (t: string) => void }) {
+  const [online, setOnline] = useState<boolean | null>(null);
+  const [estado, setEstado] = useState<Estado | null>(null);
+  const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => {
+    supabaseNavegador()
+      .from("ajustes")
+      .select("pago_online")
+      .maybeSingle()
+      .then(({ data }) => setOnline(!!data?.pago_online));
+    fetch("/api/pago/estado")
+      .then((r) => r.json())
+      .then(setEstado)
+      .catch(() => undefined);
+  }, []);
+
+  const listoParaOnline = !!estado?.stripe && estado.webhook && estado.claveSecretaSupabase;
+
+  const cambiar = async (valor: boolean) => {
+    setGuardando(true);
+    const { error } = await supabaseNavegador().from("ajustes").update({ pago_online: valor }).eq("id", true);
+    setGuardando(false);
+    if (error) return onAviso("No se pudo guardar. ¿Has ejecutado el SQL de pagos en Supabase?");
+    setOnline(valor);
+    onAviso(valor ? "Cobro online activado" : "Cobro online desactivado (pago simulado)");
+  };
+
+  const fila = (ok: boolean, texto: string) => (
+    <li className="flex items-center gap-2">
+      <span className={`grid h-5 w-5 place-items-center rounded-full text-xs text-white ${ok ? "bg-brand-500" : "bg-slate-300"}`} aria-hidden="true">
+        {ok ? "✓" : "–"}
+      </span>
+      <span className={ok ? "" : "text-tinta-tenue"}>{texto}</span>
+    </li>
+  );
+
+  return (
+    <section className="mb-8 rounded-2xl bg-white p-5 ring-1 ring-linea">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="font-semibold">Cobro del anticipo</h2>
+          <p className="mt-1 text-sm text-tinta-suave">
+            {online === null
+              ? "Cargando…"
+              : online
+                ? "Online con Stripe: la cita se confirma cuando el paciente paga."
+                : "Simulado: la cita se confirma sin cobrar nada. Solo para pruebas."}
+          </p>
+          {estado?.stripe && (
+            <p className={`mt-2 inline-block rounded-md px-2 py-0.5 text-xs font-medium ${estado.stripe === "real" ? "bg-brand-50 text-brand-700" : "bg-ambar-50 text-ambar-700"}`}>
+              Stripe en modo {estado.stripe === "real" ? "REAL (cobros de verdad)" : "de prueba (sin dinero real)"}
+            </p>
+          )}
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <button type="button" disabled={guardando || online === false} onClick={() => void cambiar(false)} className={`rounded-xl px-4 py-2 text-sm font-medium ring-1 transition disabled:cursor-default ${online === false ? "bg-tinta text-white ring-tinta" : "bg-white ring-linea hover:bg-brand-50"}`}>
+            Simulado
+          </button>
+          <button
+            type="button"
+            disabled={guardando || online === true || !listoParaOnline}
+            onClick={() => void cambiar(true)}
+            title={listoParaOnline ? undefined : "Falta configurar Stripe en Vercel"}
+            className={`rounded-xl px-4 py-2 text-sm font-medium ring-1 transition disabled:cursor-not-allowed ${online ? "bg-brand-500 text-white ring-brand-500" : "bg-white ring-linea hover:bg-brand-50 disabled:opacity-50"}`}
+          >
+            Online
+          </button>
+        </div>
+      </div>
+      {estado && !listoParaOnline && (
+        <ul className="mt-4 space-y-1.5 border-t border-linea pt-4 text-sm">
+          {fila(!!estado.stripe, "Clave de Stripe (STRIPE_SECRET_KEY)")}
+          {fila(estado.webhook, "Aviso de pagos de Stripe (STRIPE_WEBHOOK_SECRET)")}
+          {fila(estado.claveSecretaSupabase, "Clave secreta de Supabase (SUPABASE_SERVICE_ROLE_KEY)")}
+        </ul>
+      )}
+    </section>
+  );
+}

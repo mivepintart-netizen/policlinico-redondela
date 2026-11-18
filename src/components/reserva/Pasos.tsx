@@ -443,6 +443,7 @@ export function PasoPago({
   metodo: MetodoPago;
   onMetodo: (m: MetodoPago) => void;
 }) {
+  const { pagoOnline } = useCatalogo();
   const opciones: { id: MetodoPago; nombre: string; texto: string; icono: React.ReactNode }[] = [
     {
       id: "tarjeta",
@@ -480,6 +481,7 @@ export function PasoPago({
         <p className="text-3xl font-semibold tabular-nums text-ambar-600">{formatoEuros(deposito)}</p>
       </div>
 
+{!pagoOnline && (
       <fieldset>
         <legend className="mb-3 text-sm font-medium">Método de pago</legend>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -499,16 +501,24 @@ export function PasoPago({
           ))}
         </div>
       </fieldset>
+      )}
 
       <p className="mt-6 flex gap-2 rounded-xl bg-white p-4 text-sm text-tinta-suave ring-1 ring-linea">
         <svg viewBox="0 0 20 20" className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <rect x="4" y="9" width="12" height="8" rx="1.5" />
           <path d="M7 9V6.5a3 3 0 0 1 6 0V9" />
         </svg>
-        <span>
-          Al pulsar «Pagar» irás a la pasarela de pago segura de tu banco.{" "}
-          <strong className="font-medium text-tinta">Versión de prueba: no se realiza ningún cargo.</strong>
-        </span>
+        {pagoOnline ? (
+          <span>
+            Al pulsar «Pagar» irás a la página de pago segura de Stripe (tarjeta, Apple Pay o Google Pay). Tu hueco queda
+            apartado 30 minutos mientras pagas.
+          </span>
+        ) : (
+          <span>
+            <strong className="font-medium text-tinta">Modo de prueba: no se realiza ningún cargo.</strong> La cita se
+            confirma directamente.
+          </span>
+        )}
       </p>
     </>
   );

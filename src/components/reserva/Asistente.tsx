@@ -12,7 +12,7 @@ import { PasoDatos, PasoEspecialidad, PasoFecha, PasoPago, PasoProfesional, vali
 import { datosVacios, type EstadoReserva } from "./tipos";
 
 export default function Asistente({ especialidadInicial }: { especialidadInicial: string | null }) {
-  const { especialidades: todasEsp, profesionales: todosProf } = useCatalogo();
+  const { especialidades: todasEsp, profesionales: todosProf, pagoOnline } = useCatalogo();
   const especialidades = todasEsp.filter((e) => e.activa);
   const profesionales = todosProf.filter((p) => p.activo);
   const valida = especialidades.some((e) => e.id === especialidadInicial) ? especialidadInicial : null;
@@ -92,9 +92,9 @@ export default function Asistente({ especialidadInicial }: { especialidadInicial
       p_motivo: datos.motivo.trim(),
       p_metodo_pago: estado.metodoPago,
     });
-    setPagando(false);
     const fila = data?.[0];
     if (error || !fila) {
+      setPagando(false);
       const texto = mensajeError(error, "No se pudo completar la reserva. Inténtalo de nuevo.");
       // Si el hueco ya no está libre, volver a elegir hora con los huecos actualizados
       if (/hueco|disponible|horario/i.test(texto)) {
@@ -105,6 +105,28 @@ export default function Asistente({ especialidadInicial }: { especialidadInicial
       setErrorPago(texto);
       return;
     }
+    // ¿Hay que cobrar online? (lo decide la base de datos según los ajustes)
+    const { data: cita } = await supabaseNavegador().rpc("obtener_reserva_por_token", { p_token: fila.token_acceso });
+    if (cita?.[0]?.estado === "pendiente_pago") {
+      const res = await fetch("/api/pago/iniciar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: fila.token_acceso }),
+      }).catch(() => null);
+      const cuerpo = (await res?.json().catch(() => ({}))) as { url?: string; error?: string } | undefined;
+      if (res?.ok && cuerpo?.url) {
+        window.location.href = cuerpo.url; // a la página de pago de Stripe
+        return;
+      }
+      setPagando(false);
+      setErrorPago(
+        `${cuerpo?.error ?? "No se pudo abrir la página de pago."} Tu hueco está apartado 30 minutos: puedes reintentar el pago desde «Mi cita» con el código ${fila.id}.`
+      );
+      setToken(fila.token_acceso);
+      return;
+    }
+
+    setPagando(false);
     setToken(fila.token_acceso);
     setCodigo(fila.id);
   };
@@ -151,7 +173,13 @@ export default function Asistente({ especialidadInicial }: { especialidadInicial
   const puedeSeguir =
     (paso === 2 && !!estado.hueco) || paso === 3 || paso === 4;
   const textoBoton =
-    paso === 4 ? (pagando ? "Procesando pago…" : `Pagar ${formatoEuros(esp?.deposito ?? 0)} y confirmar`) : "Continuar";
+    paso === 4
+      ? pagando
+        ? pagoOnline
+          ? "Abriendo el pago seguro…"
+          : "Confirmando…"
+        : `Pagar ${formatoEuros(esp?.deposito ?? 0)}${pagoOnline ? "" : " y confirmar"}`
+      : "Continuar";
 
   return (
     <div ref={arriba} className="scroll-mt-24">
@@ -218,6 +246,11 @@ export default function Asistente({ especialidadInicial }: { especialidadInicial
           {errorPago && (
             <p role="alert" className="mt-6 rounded-xl bg-red-50 p-4 text-sm text-red-700">
               {errorPago}
+              {token && (
+                <a href={`/mi-zona/cita/${token}`} className="mt-2 block font-semibold underline">
+                  Ir a Mi cita para pagar
+                </a>
+              )}
             </p>
           )}
 

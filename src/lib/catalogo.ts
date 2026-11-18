@@ -34,6 +34,8 @@ export type Catalogo = {
   especialidades: Especialidad[];
   profesionales: Profesional[];
   festivos: Festivo[];
+  /** true: se cobra el anticipo con la pasarela; false: pago simulado */
+  pagoOnline: boolean;
 };
 
 export const aEspecialidad = (f: FilaEspecialidad): Especialidad => ({
@@ -58,10 +60,11 @@ export const aProfesional = (f: FilaProfesional): Profesional => ({
 });
 
 export async function cargarCatalogo(sb: SupabaseClient<Database>): Promise<Catalogo> {
-  const [e, p, f] = await Promise.all([
+  const [e, p, f, a] = await Promise.all([
     sb.from("especialidades").select("*").order("orden").order("nombre"),
     sb.from("profesionales").select("*").order("orden").order("nombre"),
     sb.from("festivos").select("*").order("fecha"),
+    sb.from("ajustes").select("pago_online").maybeSingle(),
   ]);
   const error = e.error ?? p.error ?? f.error;
   if (error) throw error;
@@ -69,5 +72,7 @@ export async function cargarCatalogo(sb: SupabaseClient<Database>): Promise<Cata
     especialidades: (e.data ?? []).map(aEspecialidad),
     profesionales: (p.data ?? []).map(aProfesional),
     festivos: f.data ?? [],
+    // Si la tabla de ajustes aún no existe (falta el SQL de pagos): simulado
+    pagoOnline: !!a.data?.pago_online,
   };
 }

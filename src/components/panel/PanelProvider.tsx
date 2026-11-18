@@ -12,7 +12,7 @@ import { mensajeError, supabaseNavegador } from "@/lib/supabase/cliente";
  * modificar nada.
  */
 
-export type NuevaReservaPanel = Omit<ReservaPanel, "id" | "token" | "creadaEl" | "reembolso">;
+export type NuevaReservaPanel = Omit<ReservaPanel, "id" | "token" | "creadaEl" | "reembolso" | "pagoRef" | "pagoOnline" | "expiraEn">;
 
 type Resultado = string | null; // null = sin error; texto = mensaje de error
 
@@ -32,6 +32,8 @@ type Contexto = {
   cargarReservas: (desde: string, hasta: string) => Promise<ReservaPanel[]>;
   actualizarReserva: (r: ReservaPanel, cambios: Partial<ReservaPanel>) => Promise<Resultado>;
   crearReserva: (r: NuevaReservaPanel) => Promise<{ id?: string; error: Resultado }>;
+  /** Devuelve en la pasarela el anticipo de una reserva ya cancelada con reembolso */
+  reembolsar: (id: string) => Promise<Resultado>;
 
   guardarProfesional: (p: Profesional, nuevo?: boolean) => Promise<Resultado>;
   guardarEspecialidades: (e: Especialidad[]) => Promise<Resultado>;
@@ -163,6 +165,8 @@ export default function PanelProvider({ children }: { children: React.ReactNode 
 
   const cargarReservas = useCallback(
     async (desde: string, hasta: string) => {
+      // Liberar huecos de pagos online no completados (si falla, no pasa nada)
+      await sb.rpc("liberar_pagos_caducados").then(undefined, () => undefined);
       // Paginado: Supabase devuelve como máximo 1000 filas por consulta
       const filas: ReservaPanel[] = [];
       for (let desdeFilaN = 0; ; desdeFilaN += 1000) {
@@ -233,6 +237,18 @@ export default function PanelProvider({ children }: { children: React.ReactNode 
         if (res.error?.code === "23505") return { error: "Alguien acaba de ocupar ese hueco. Elige otra hora." };
         const error = tras(res, "No se pudo crear la cita.");
         return { id: res.data?.id, error };
+      },
+
+      reembolsar: async (id) => {
+        const { data } = await sb.auth.getSession();
+        const res = await fetch("/api/panel/reembolso", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token ?? ""}` },
+          body: JSON.stringify({ id }),
+        }).catch(() => null);
+        if (!res) return "No hay conexión. La devolución no se ha hecho.";
+        const cuerpo = (await res.json().catch(() => ({}))) as { error?: string };
+        return res.ok ? null : cuerpo.error ?? "No se pudo hacer la devolución.";
       },
 
       guardarProfesional: async (p, nuevo = false) => {

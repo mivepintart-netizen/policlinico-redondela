@@ -8,11 +8,11 @@ import { momento } from "@/lib/agenda";
 import type { CitaPaciente } from "@/lib/database.types";
 import { mensajeError, supabaseNavegador } from "@/lib/supabase/cliente";
 import { useCatalogo } from "@/components/CatalogoProvider";
-type EstadoVisible = "confirmada" | "cancelada" | "completada";
+type EstadoVisible = "pendiente_pago" | "confirmada" | "cancelada" | "completada";
 
 /** Estado que ve el paciente: una cita activa cuya hora ya pasó se muestra como realizada. */
 function estadoEfectivo(r: CitaPaciente, ahora: Date): EstadoVisible {
-  if (r.estado === "cancelada" || r.estado === "completada") return r.estado;
+  if (r.estado === "cancelada" || r.estado === "completada" || r.estado === "pendiente_pago") return r.estado;
   return momento(r.fecha, r.hora) < ahora ? "completada" : "confirmada";
 }
 
@@ -25,6 +25,7 @@ import { descargarIcs } from "./calendarioIcs";
 type Aviso = { tipo: "ok" | "info"; texto: string } | null;
 
 const ETIQUETAS = {
+  pendiente_pago: { texto: "Pendiente de pago", clase: "bg-ambar-50 text-ambar-700 ring-ambar-100" },
   confirmada: { texto: "Confirmada", clase: "bg-brand-50 text-brand-700 ring-brand-100" },
   cancelada: { texto: "Cancelada", clase: "bg-red-50 text-red-700 ring-red-100" },
   completada: { texto: "Realizada", clase: "bg-fondo text-tinta-suave ring-linea" },
@@ -127,6 +128,12 @@ export default function DetalleCita({ token }: { token: string }) {
 
   useEffect(() => {
     setAhora(new Date());
+    const pago = new URLSearchParams(window.location.search).get("pago");
+    if (pago === "ok") setAviso({ tipo: "ok", texto: "¡Pago recibido! Tu cita está confirmada. Guarda este enlace para gestionarla." });
+    else if (pago === "caducado")
+      setAviso({ tipo: "info", texto: "El pago llegó cuando el hueco ya estaba ocupado. Te hemos devuelto el dinero; elige otra hora." });
+    else if (pago === "cancelado") setAviso({ tipo: "info", texto: "No se ha completado el pago. Tu cita aún no está confirmada." });
+    if (pago) window.history.replaceState(null, "", window.location.pathname);
     supabaseNavegador()
       .rpc("obtener_reserva_por_token", { p_token: token })
       .then(({ data, error }) => {
@@ -173,27 +180,57 @@ export default function DetalleCita({ token }: { token: string }) {
   };
   const prof = profesionales.find((p) => p.id === reserva.profesional_id);
   // Precio y anticipo guardados en la reserva (los de la especialidad pueden haber cambiado)
-  const anticipo = reserva.metodo_pago && reserva.estado !== "sin_deposito" ? reserva.deposito : 0;
+  const anticipo =
+    reserva.metodo_pago && reserva.estado !== "sin_deposito" && reserva.estado !== "pendiente_pago" ? reserva.deposito : 0;
   const pendiente = reserva.precio - anticipo;
   const estado = estadoEfectivo(reserva, ahora);
   const enPlazo = dentroDePlazo(reserva, ahora);
   const activa = estado === "confirmada";
+  const esperandoPago = estado === "pendiente_pago";
+
+  const pagarAhora = async () => {
+    setOcupado(true);
+    setErrorAccion(null);
+    const res = await fetch("/api/pago/iniciar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    }).catch(() => null);
+    const cuerpo = (await res?.json().catch(() => ({}))) as { url?: string; error?: string } | undefined;
+    if (res?.ok && cuerpo?.url) {
+      window.location.href = cuerpo.url;
+      return;
+    }
+    setOcupado(false);
+    setErrorAccion(cuerpo?.error ?? "No se pudo abrir el pago. Inténtalo de nuevo.");
+    await recargar();
+  };
 
   const confirmarCancelacion = async () => {
     setOcupado(true);
     setErrorAccion(null);
-    const { data: devuelto, error } = await supabaseNavegador().rpc("cancelar_reserva_por_token", { p_token: token });
+    const res = await fetch("/api/cita/cancelar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    }).catch(() => null);
+    const cuerpo = (await res?.json().catch(() => ({}))) as
+      | { reembolso?: boolean; devolucionPendiente?: boolean; error?: string }
+      | undefined;
     setOcupado(false);
     setCancelando(false);
-    if (error) {
-      setErrorAccion(mensajeError(error, "No se pudo cancelar la cita."));
+    if (!res?.ok) {
+      setErrorAccion(cuerpo?.error ?? "No se pudo cancelar la cita. Revisa tu conexión.");
       return;
     }
+    const devuelto = cuerpo?.reembolso;
     await recargar();
     setAviso({
       tipo: "info",
       texto: devuelto
-        ? `Cita cancelada. Te devolveremos ${formatoEuros(anticipo)} en 3–5 días hábiles.`
+        ? cuerpo?.devolucionPendiente
+          ? `Cita cancelada. La clínica te devolverá ${formatoEuros(anticipo)}; si en unos días no lo ves, llámanos.`
+          : `Cita cancelada. Te devolveremos ${formatoEuros(anticipo)} en 5–10 días hábiles.`
         : anticipo > 0
           ? "Cita cancelada. Al ser con menos de 24 horas, el anticipo no se devuelve."
           : "Cita cancelada.",
@@ -262,6 +299,29 @@ export default function DetalleCita({ token }: { token: string }) {
           <p>{aviso.texto}</p>
           <button type="button" onClick={() => setAviso(null)} aria-label="Cerrar aviso" className="-m-1 rounded-lg p-1 opacity-80 hover:opacity-100">
             ✕
+          </button>
+        </div>
+      )}
+
+      {esperandoPago && (
+        <div className="mt-6 flex flex-col gap-4 rounded-2xl bg-ambar-50 p-5 ring-1 ring-ambar-100 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-semibold text-ambar-700">Falta pagar el anticipo para confirmar la cita</p>
+            <p className="mt-1 text-sm text-tinta-suave">
+              Tu hueco está apartado
+              {reserva.expira_en
+                ? ` hasta las ${new Date(reserva.expira_en).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}`
+                : ""}
+              . Si no se paga, se libera.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void pagarAhora()}
+            disabled={ocupado}
+            className="shrink-0 rounded-xl bg-ambar-500 px-5 py-3 font-semibold text-white transition hover:bg-ambar-600 disabled:opacity-60"
+          >
+            {ocupado ? "Abriendo pago…" : `Pagar ${formatoEuros(reserva.deposito)}`}
           </button>
         </div>
       )}
@@ -467,6 +527,14 @@ export default function DetalleCita({ token }: { token: string }) {
                     </button>
                   </li>
                 </ul>
+              </div>
+            ) : esperandoPago ? (
+              <div className="rounded-2xl bg-white p-6 ring-1 ring-linea">
+                <p className="font-semibold">¿Ya no quieres esta cita?</p>
+                <p className="mt-1 text-sm text-tinta-suave">Puedes anular la reserva y liberar el hueco. No se te ha cobrado nada.</p>
+                <button type="button" onClick={() => setCancelando(true)} className="mt-4 w-full rounded-xl px-5 py-3 font-semibold text-red-700 ring-1 ring-red-200 transition hover:bg-red-50">
+                  Anular reserva
+                </button>
               </div>
             ) : (
               <div className="rounded-2xl bg-white p-6 ring-1 ring-linea">

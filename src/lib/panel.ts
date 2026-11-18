@@ -30,11 +30,17 @@ export type ReservaPanel = {
   };
   creadaEl: string;
   origen: "web" | "panel";
+  /** Pago en la pasarela (para devoluciones). null si se pagó en recepción o era simulado. */
+  pagoRef: string | null;
+  /** true si la reserva se hizo con cobro online activado */
+  pagoOnline: boolean;
+  expiraEn: string | null;
 };
 
 export type SesionPanel = { id: string; email: string; nombre: string; rol: RolPanel };
 
 export const ESTADOS: Record<EstadoPanel, { texto: string; clase: string; punto: string }> = {
+  pendiente_pago: { texto: "Pago pendiente", clase: "bg-white text-ambar-700 ring-ambar-500/40", punto: "bg-ambar-500 animate-pulse" },
   confirmada: { texto: "Confirmada", clase: "bg-brand-50 text-brand-700 ring-brand-100", punto: "bg-brand-500" },
   sin_deposito: { texto: "Sin anticipo", clase: "bg-ambar-50 text-ambar-700 ring-ambar-100", punto: "bg-ambar-500" },
   completada: { texto: "Completada", clase: "bg-slate-100 text-slate-600 ring-slate-200", punto: "bg-slate-400" },
@@ -50,7 +56,10 @@ export const METODOS: Record<MetodoPago, string> = {
 export const esActiva = (r: ReservaPanel) => r.estado !== "cancelada";
 
 /** Anticipo realmente cobrado (0 si no se pagó). */
-export const anticipoCobrado = (r: ReservaPanel) => (r.estado === "sin_deposito" || !r.metodoPago ? 0 : r.deposito);
+export const anticipoCobrado = (r: ReservaPanel) =>
+  r.estado === "sin_deposito" || r.estado === "pendiente_pago" || !r.metodoPago || (r.metodoPago !== "recepcion" && !r.pagoRef && r.pagoOnline)
+    ? 0
+    : r.deposito;
 
 /* ----- Conversión desde/hacia la base de datos ----- */
 
@@ -76,6 +85,9 @@ export const desdeFila = (f: FilaReserva): ReservaPanel => ({
   },
   creadaEl: f.created_at,
   origen: f.origen,
+  pagoRef: f.pago_ref,
+  pagoOnline: !!f.pago_sesion,
+  expiraEn: f.expira_en,
 });
 
 /** Cambios de la aplicación → columnas de la tabla. */

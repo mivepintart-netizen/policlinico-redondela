@@ -34,7 +34,7 @@ export default function DetalleReserva({
   onCerrar: () => void;
   onAviso: (texto: string) => void;
 }) {
-  const { especialidades, profesionales, actualizarReserva, ahora } = usePanel();
+  const { especialidades, profesionales, actualizarReserva, reembolsar, ahora } = usePanel();
   const [cancelando, setCancelando] = useState(false);
   const [devolver, setDevolver] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -50,12 +50,28 @@ export default function DetalleReserva({
   const pasada = new Date(`${r.fecha}T${r.hora}:00`) < ahora;
   const tel = r.paciente.telefono.replace(/\s/g, "");
 
-  const hacer = async (cambios: Partial<ReservaPanel>, texto: string) => {
+  const hacer = async (cambios: Partial<ReservaPanel>, textoBase: string) => {
+    let texto = textoBase;
     setGuardando(true);
     setError(null);
     const err = await actualizarReserva(r, cambios);
+    if (err) {
+      setGuardando(false);
+      return setError(err);
+    }
+    // Cancelada con devolución de un pago online: devolver en la pasarela
+    if (cambios.estado === "cancelada" && cambios.reembolso && r.pagoRef) {
+      const errDev = await reembolsar(r.id);
+      if (errDev) {
+        setGuardando(false);
+        onAviso(`${r.id} cancelada, pero la devolución falló: ${errDev}`);
+        setCancelando(false);
+        onCerrar();
+        return;
+      }
+      texto += " · anticipo devuelto a la tarjeta";
+    }
     setGuardando(false);
-    if (err) return setError(err);
     onAviso(texto);
     setCancelando(false);
     onCerrar();
@@ -104,6 +120,18 @@ export default function DetalleReserva({
       );
     }
     switch (r.estado) {
+      case "pendiente_pago":
+        return (
+          <div className="space-y-3">
+            <p className="text-sm text-tinta-suave">
+              El paciente está pagando online. Si no paga
+              {r.expiraEn ? ` antes de las ${new Date(r.expiraEn).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}` : ""}, el hueco se libera solo.
+            </p>
+            <button type="button" onClick={() => hacer({ estado: "cancelada", reembolso: false }, `${r.id} cancelada; el hueco queda libre`)} className={`${btn.peligro} w-full`}>
+              Liberar el hueco ahora
+            </button>
+          </div>
+        );
       case "confirmada":
         return (
           <div className="grid gap-2 sm:grid-cols-2">

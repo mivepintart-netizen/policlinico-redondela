@@ -19,6 +19,7 @@ const PX_MIN = 1.6; // alto de cada minuto en la vista por columnas
 const aMin = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5));
 
 const COLOR_BLOQUE: Record<ReservaPanel["estado"], string> = {
+  pendiente_pago: "bg-white ring-ambar-500/40 hover:ring-ambar-500 border-l-ambar-500 border-dashed text-tinta-suave",
   confirmada: "bg-brand-50 ring-brand-200 hover:ring-brand-400 border-l-brand-500",
   sin_deposito: "bg-ambar-50 ring-ambar-100 hover:ring-ambar-500 border-l-ambar-500",
   completada: "bg-slate-50 ring-slate-200 hover:ring-slate-400 border-l-slate-400 text-tinta-suave",
