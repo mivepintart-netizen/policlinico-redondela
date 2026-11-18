@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { especialidades, formatoEuros, profesionales } from "@/lib/datos";
+import { formatoEuros } from "@/lib/datos";
 import type { Hueco } from "@/lib/agenda";
-import { guardarNueva } from "@/lib/reservasDemo";
+import { mensajeError, supabaseNavegador } from "@/lib/supabase/cliente";
+import { useCatalogo } from "@/components/CatalogoProvider";
 import BarraPasos from "./BarraPasos";
 import Resumen from "./Resumen";
 import Confirmacion from "./Confirmacion";
@@ -11,6 +12,9 @@ import { PasoDatos, PasoEspecialidad, PasoFecha, PasoPago, PasoProfesional, vali
 import { datosVacios, type EstadoReserva } from "./tipos";
 
 export default function Asistente({ especialidadInicial }: { especialidadInicial: string | null }) {
+  const { especialidades: todasEsp, profesionales: todosProf } = useCatalogo();
+  const especialidades = todasEsp.filter((e) => e.activa);
+  const profesionales = todosProf.filter((p) => p.activo);
   const valida = especialidades.some((e) => e.id === especialidadInicial) ? especialidadInicial : null;
 
   const [estado, setEstado] = useState<EstadoReserva>({
@@ -26,6 +30,8 @@ export default function Asistente({ especialidadInicial }: { especialidadInicial
   const [pagando, setPagando] = useState(false);
   const [codigo, setCodigo] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [errorPago, setErrorPago] = useState<string | null>(null);
+  const [recargaHuecos, setRecargaHuecos] = useState(0);
 
   // La fecha actual solo se conoce en el navegador (evita desajustes con el servidor)
   const [ahora, setAhora] = useState<Date | null>(null);
@@ -67,39 +73,40 @@ export default function Asistente({ especialidadInicial }: { especialidadInicial
 
   const elegirHueco = (h: Hueco) => setEstado((s) => ({ ...s, hueco: h }));
 
-  const pagar = () => {
+  const pagar = async () => {
     setPagando(true);
-    // Simulación de pasarela de pago
-    setTimeout(() => {
-      const nuevoCodigo = `RDN-${String(Math.floor(Math.random() * 100000)).padStart(5, "0")}`;
-      const nuevoToken =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-      const { datos } = estado;
-      // Versión de prueba: se guarda en el navegador para verla en Mi zona
-      guardarNueva({
-        id: nuevoCodigo,
-        token: nuevoToken,
-        especialidadId: estado.especialidadId!,
-        profesionalId: estado.hueco!.profesionalId,
-        fecha: estado.fecha!,
-        hora: estado.hueco!.hora,
-        estado: "confirmada",
-        reembolso: false,
-        metodoPago: estado.metodoPago,
-        paciente: {
-          nombre: datos.nombre.trim(),
-          apellidos: datos.apellidos.trim(),
-          email: datos.email.trim().toLowerCase(),
-          telefono: datos.telefono.trim(),
-        },
-        creadaEl: new Date().toISOString(),
-      });
-      setToken(nuevoToken);
-      setCodigo(nuevoCodigo);
-      setPagando(false);
-    }, 1200);
+    setErrorPago(null);
+    const { datos } = estado;
+    // PAGO SIMULADO: aquí irá la pasarela (Redsys/Stripe). De momento se
+    // registra la reserva directamente como confirmada.
+    const { data, error } = await supabaseNavegador().rpc("crear_reserva", {
+      p_especialidad_id: estado.especialidadId!,
+      p_profesional_id: estado.hueco!.profesionalId,
+      p_fecha: estado.fecha!,
+      p_hora: estado.hueco!.hora,
+      p_nombre: datos.nombre.trim(),
+      p_apellidos: datos.apellidos.trim(),
+      p_dni: datos.dni.trim().toUpperCase(),
+      p_telefono: datos.telefono.replace(/\s/g, ""),
+      p_email: datos.email.trim().toLowerCase(),
+      p_motivo: datos.motivo.trim(),
+      p_metodo_pago: estado.metodoPago,
+    });
+    setPagando(false);
+    const fila = data?.[0];
+    if (error || !fila) {
+      const texto = mensajeError(error, "No se pudo completar la reserva. Inténtalo de nuevo.");
+      // Si el hueco ya no está libre, volver a elegir hora con los huecos actualizados
+      if (/hueco|disponible|horario/i.test(texto)) {
+        setEstado((s) => ({ ...s, hueco: null }));
+        setRecargaHuecos((n) => n + 1);
+        setPaso(2);
+      }
+      setErrorPago(texto);
+      return;
+    }
+    setToken(fila.token_acceso);
+    setCodigo(fila.id);
   };
 
   const siguiente = () => {
@@ -111,7 +118,8 @@ export default function Asistente({ especialidadInicial }: { especialidadInicial
         return;
       }
     }
-    if (paso === 4) return pagar();
+    if (paso === 4) return void pagar();
+    setErrorPago(null);
     setPaso((p) => p + 1);
   };
 
@@ -122,13 +130,13 @@ export default function Asistente({ especialidadInicial }: { especialidadInicial
   };
 
   // Con un único profesional, elegirlo automáticamente
+  const unicoId = soloUnProfesional ? profesionales.find((p) => p.especialidadId === esp?.id)?.id : undefined;
   useEffect(() => {
-    if (paso === 1 && soloUnProfesional && esp) {
-      const unico = profesionales.find((p) => p.especialidadId === esp.id)!;
-      setEstado((s) => (s.profesionalId === unico.id ? s : { ...s, profesionalId: unico.id, fecha: null, hueco: null }));
+    if (paso === 1 && unicoId) {
+      setEstado((s) => (s.profesionalId === unicoId ? s : { ...s, profesionalId: unicoId, fecha: null, hueco: null }));
       setPaso(2);
     }
-  }, [paso, soloUnProfesional, esp]);
+  }, [paso, unicoId]);
 
   /* ----- Render ----- */
 
@@ -186,6 +194,7 @@ export default function Asistente({ especialidadInicial }: { especialidadInicial
                 hueco={estado.hueco}
                 onFecha={elegirFecha}
                 onHueco={elegirHueco}
+                recarga={recargaHuecos}
               />
             ) : (
               <div className="h-96 animate-pulse rounded-2xl bg-white ring-1 ring-linea" />
@@ -204,6 +213,12 @@ export default function Asistente({ especialidadInicial }: { especialidadInicial
               metodo={estado.metodoPago}
               onMetodo={(m) => setEstado((s) => ({ ...s, metodoPago: m }))}
             />
+          )}
+
+          {errorPago && (
+            <p role="alert" className="mt-6 rounded-xl bg-red-50 p-4 text-sm text-red-700">
+              {errorPago}
+            </p>
           )}
 
           {/* Navegación */}

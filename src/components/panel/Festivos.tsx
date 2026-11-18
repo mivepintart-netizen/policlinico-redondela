@@ -6,7 +6,7 @@ import { usePanel } from "./PanelProvider";
 import { Cabecera, Toast, btn, claseCampoBase } from "./ui";
 
 export default function Festivos() {
-  const { festivos, guardarFestivos, ahora, reservas } = usePanel();
+  const { festivos, anadirFestivo, borrarFestivo, ahora, cargarReservas } = usePanel();
   const hoy = aISO(ahora);
   const [fecha, setFecha] = useState("");
   const [descripcion, setDescripcion] = useState("");
@@ -17,13 +17,14 @@ export default function Festivos() {
   const proximos = festivos.filter((f) => f.fecha >= hoy);
   const pasados = festivos.filter((f) => f.fecha < hoy).reverse();
 
-  const anadir = (e: React.FormEvent) => {
+  const anadir = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fecha) return setError("Elige una fecha.");
     if (!descripcion.trim()) return setError("Escribe una descripción (ej. Fiesta local).");
     if (festivos.some((f) => f.fecha === fecha)) return setError("Ese día ya está marcado como festivo.");
-    guardarFestivos([...festivos, { fecha, descripcion: descripcion.trim() }]);
-    const citas = reservas(fecha, fecha).filter((r) => r.estado !== "cancelada").length;
+    const err = await anadirFestivo({ fecha, descripcion: descripcion.trim() });
+    if (err) return setError(err);
+    const citas = (await cargarReservas(fecha, fecha).catch(() => [])).filter((r) => r.estado !== "cancelada").length;
     setAviso(
       citas
         ? `Festivo añadido. Ojo: hay ${citas} citas ese día, revisa la agenda para avisar a los pacientes.`
@@ -48,9 +49,9 @@ export default function Festivos() {
               {borrable && (
                 <button
                   type="button"
-                  onClick={() => {
-                    guardarFestivos(festivos.filter((x) => x.fecha !== f.fecha));
-                    setAviso("Festivo eliminado");
+                  onClick={async () => {
+                    const err = await borrarFestivo(f.fecha);
+                    setAviso(err ?? "Festivo eliminado");
                   }}
                   className={btn.fantasma}
                   aria-label={`Eliminar festivo ${f.descripcion}`}

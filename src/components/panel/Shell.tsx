@@ -83,7 +83,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           type="button"
           onClick={() => {
             saliendo.current = true;
-            cerrarSesion();
+            void cerrarSesion();
           }}
           className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-brand-100 transition hover:bg-white/5 hover:text-white"
         >

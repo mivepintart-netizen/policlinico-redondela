@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import type { DiaSemana, Turno } from "@/lib/datos";
-import type { ProfesionalPanel } from "@/lib/panel";
+import type { DiaSemana, Profesional, Turno } from "@/lib/catalogo";
 import { usePanel } from "./PanelProvider";
 import { Cabecera, Cajon, Toast, btn, claseCampo } from "./ui";
 
@@ -35,19 +34,22 @@ function Interruptor({ activo, onCambiar, etiqueta }: { activo: boolean; onCambi
 }
 
 export default function Profesionales() {
-  const { profesionales, especialidades, guardarProfesionales } = usePanel();
+  const { profesionales, especialidades, guardarProfesional } = usePanel();
   const [nuevo, setNuevo] = useState(false);
   const [form, setForm] = useState({ nombre: "", rol: "", especialidadId: "" });
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const cerrarAviso = useCallback(() => setAviso(null), []);
 
-  const cambiar = (id: string, f: (p: ProfesionalPanel) => ProfesionalPanel, texto?: string) => {
-    guardarProfesionales(profesionales.map((p) => (p.id === id ? f(p) : p)));
-    if (texto) setAviso(texto);
+  const cambiar = async (id: string, f: (p: Profesional) => Profesional, texto?: string) => {
+    const actual = profesionales.find((p) => p.id === id);
+    if (!actual) return;
+    const err = await guardarProfesional(f(actual));
+    if (err) setAviso(err);
+    else if (texto) setAviso(texto);
   };
 
-  const alternarTurno = (p: ProfesionalPanel, dia: DiaSemana) =>
+  const alternarTurno = (p: Profesional, dia: DiaSemana) =>
     cambiar(p.id, (x) => {
       const horario = { ...x.horario };
       const sig = SIGUIENTE[horario[dia] ?? ""];
@@ -56,7 +58,7 @@ export default function Profesionales() {
       return { ...x, horario };
     });
 
-  const crear = () => {
+  const crear = async () => {
     if (!form.nombre.trim() || !form.rol.trim() || !form.especialidadId) {
       setError("Rellena nombre, puesto y especialidad.");
       return;
@@ -64,10 +66,19 @@ export default function Profesionales() {
     const base = form.nombre.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/^dra?\.\s*/, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
     let id = base;
     for (let i = 2; profesionales.some((p) => p.id === id); i++) id = `${base}-${i}`;
-    guardarProfesionales([
-      ...profesionales,
-      { id, nombre: form.nombre.trim(), rol: form.rol.trim(), especialidadId: form.especialidadId as ProfesionalPanel["especialidadId"], horario: {}, activo: true },
-    ]);
+    const err = await guardarProfesional(
+      {
+        id,
+        nombre: form.nombre.trim(),
+        rol: form.rol.trim(),
+        especialidadId: form.especialidadId,
+        horario: {},
+        activo: true,
+        orden: Math.max(0, ...profesionales.map((p) => p.orden)) + 1,
+      },
+      true
+    );
+    if (err) return setError(err);
     setForm({ nombre: "", rol: "", especialidadId: "" });
     setError(null);
     setNuevo(false);
@@ -144,7 +155,7 @@ export default function Profesionales() {
         pie={
           <div className="flex gap-2">
             <button type="button" onClick={() => setNuevo(false)} className={`${btn.secundario} flex-1`}>Cancelar</button>
-            <button type="button" onClick={crear} className={`${btn.primario} flex-1`}>Añadir</button>
+            <button type="button" onClick={() => void crear()} className={`${btn.primario} flex-1`}>Añadir</button>
           </div>
         }
       >

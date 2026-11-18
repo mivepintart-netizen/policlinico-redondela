@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { fechaLarga } from "@/lib/agenda";
 import { formatoEuros } from "@/lib/datos";
-import { METODOS, type ReservaPanel } from "@/lib/panel";
+import { METODOS, anticipoCobrado, type ReservaPanel } from "@/lib/panel";
 import { usePanel } from "./PanelProvider";
 import { BadgeEstado, Cajon, btn } from "./ui";
 
@@ -37,19 +37,25 @@ export default function DetalleReserva({
   const { especialidades, profesionales, actualizarReserva, ahora } = usePanel();
   const [cancelando, setCancelando] = useState(false);
   const [devolver, setDevolver] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!reserva) return null;
   const r = reserva;
   const esp = especialidades.find((e) => e.id === r.especialidadId);
   const prof = profesionales.find((p) => p.id === r.profesionalId);
-  const precio = esp?.precio ?? 0;
-  const anticipoPagado = r.estado === "sin_deposito" || !r.metodoPago ? 0 : esp?.deposito ?? 0;
+  const precio = r.precio;
+  const anticipoPagado = anticipoCobrado(r);
   const enPlazo = new Date(`${r.fecha}T${r.hora}:00`).getTime() - ahora.getTime() > 24 * 3600 * 1000;
   const pasada = new Date(`${r.fecha}T${r.hora}:00`) < ahora;
   const tel = r.paciente.telefono.replace(/\s/g, "");
 
-  const hacer = (cambios: Partial<ReservaPanel>, texto: string) => {
-    actualizarReserva(r, cambios);
+  const hacer = async (cambios: Partial<ReservaPanel>, texto: string) => {
+    setGuardando(true);
+    setError(null);
+    const err = await actualizarReserva(r, cambios);
+    setGuardando(false);
+    if (err) return setError(err);
     onAviso(texto);
     setCancelando(false);
     onCerrar();
@@ -57,6 +63,7 @@ export default function DetalleReserva({
 
   const cerrar = () => {
     setCancelando(false);
+    setError(null);
     onCerrar();
   };
 
@@ -150,7 +157,12 @@ export default function DetalleReserva({
         </span>
       }
       onCerrar={cerrar}
-      pie={acciones}
+      pie={
+        <fieldset disabled={guardando} className="space-y-3 disabled:opacity-60">
+          {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+          {acciones}
+        </fieldset>
+      }
     >
       <div className="space-y-4">
         <Bloque titulo="Cita">

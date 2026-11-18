@@ -1,4 +1,4 @@
-import type { IlustracionId } from "@/lib/datos";
+type IlustracionId = "medicina-general" | "fisioterapia" | "traumatologia" | "psicologia" | "podologia" | "cardiologia" | "nutricion";
 
 /**
  * Ilustraciones de línea para cada especialidad.
@@ -76,7 +76,7 @@ export default function IlustracionEspecialidad({
   className = "",
   compacta = false,
 }: {
-  id: IlustracionId;
+  id: string;
   className?: string;
   /** Versión pequeña (iconos de lista): sin formas decorativas y trazo más grueso. */
   compacta?: boolean;
@@ -102,7 +102,10 @@ export default function IlustracionEspecialidad({
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        {trazos[id]}
+        {trazos[id as IlustracionId] ?? (
+          // Especialidad nueva sin dibujo propio: cruz médica
+          <path d="M34 14h12v16h16v12H46v16H34V42H18V30h16Z" />
+        )}
       </svg>
     </div>
   );

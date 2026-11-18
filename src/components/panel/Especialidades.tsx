@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { formatoEuros } from "@/lib/datos";
-import type { EspecialidadPanel } from "@/lib/panel";
+import type { Especialidad } from "@/lib/catalogo";
 import { usePanel } from "./PanelProvider";
 import { Cabecera, Toast, btn, claseCampoBase } from "./ui";
 
@@ -10,7 +10,7 @@ type Campo = "duracionMin" | "precio" | "deposito";
 
 export default function Especialidades() {
   const { especialidades, guardarEspecialidades } = usePanel();
-  const [borrador, setBorrador] = useState<EspecialidadPanel[]>(especialidades);
+  const [borrador, setBorrador] = useState<Especialidad[]>(especialidades);
   const [aviso, setAviso] = useState<string | null>(null);
   const cerrarAviso = useCallback(() => setAviso(null), []);
 
@@ -26,7 +26,7 @@ export default function Especialidades() {
   const hayCambios = JSON.stringify(borrador) !== JSON.stringify(especialidades);
   const hayErrores = errores.some(Boolean);
 
-  const set = (i: number, cambios: Partial<EspecialidadPanel>) =>
+  const set = (i: number, cambios: Partial<Especialidad>) =>
     setBorrador(borrador.map((e, j) => (j === i ? { ...e, ...cambios } : e)));
 
   const numero = (i: number, campo: Campo, sufijo: string) => (
@@ -52,9 +52,9 @@ export default function Especialidades() {
         <button
           type="button"
           disabled={!hayCambios || hayErrores}
-          onClick={() => {
-            guardarEspecialidades(borrador);
-            setAviso("Cambios guardados");
+          onClick={async () => {
+            const err = await guardarEspecialidades(borrador);
+            setAviso(err ?? "Cambios guardados");
           }}
           className={btn.primario}
         >

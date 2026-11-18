@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { aISO } from "@/lib/agenda";
+import { aISO, horasDelProfesional, momento } from "@/lib/agenda";
 import { formatoEuros } from "@/lib/datos";
-import { horasDelProfesional, nuevoCodigo, type ReservaPanel } from "@/lib/panel";
+
 import { dniValido } from "@/components/reserva/Pasos";
-import { usePanel } from "./PanelProvider";
+import { usePanel, useReservas, type NuevaReservaPanel } from "./PanelProvider";
 import { Cajon, btn, claseCampo } from "./ui";
 
 const sinClave = (o: Record<string, string>, k: string) => {
@@ -25,9 +25,9 @@ export default function NuevaReserva({
   abierto: boolean;
   fechaInicial?: string;
   onCerrar: () => void;
-  onCreada: (r: ReservaPanel) => void;
+  onCreada: (r: NuevaReservaPanel & { id: string }) => void;
 }) {
-  const { especialidades, profesionales, festivos, reservas, crearReserva, ahora } = usePanel();
+  const { especialidades, profesionales, festivos, crearReserva, ahora } = usePanel();
   const hoy = aISO(ahora);
 
   const [espId, setEspId] = useState("");
@@ -37,6 +37,9 @@ export default function NuevaReserva({
   const [paciente, setPaciente] = useState(vacio);
   const [pago, setPago] = useState<"sin_deposito" | "recepcion">("sin_deposito");
   const [errores, setErrores] = useState<Record<string, string>>({});
+  const [guardando, setGuardando] = useState(false);
+  const [errorGuardar, setErrorGuardar] = useState<string | null>(null);
+  const { reservas: delDia } = useReservas(fecha, fecha);
 
   // Al abrir, proponer el día que se está viendo en la agenda
   useEffect(() => {
@@ -52,15 +55,12 @@ export default function NuevaReserva({
   const festivo = festivos.find((f) => f.fecha === fecha);
 
   const horasLibres = useMemo(() => {
-    if (!prof || !esp || festivo) return [];
+    if (!prof || !esp || festivo || !delDia) return [];
     const ocupadas = new Set(
-      reservas(fecha, fecha)
-        .filter((r) => r.profesionalId === prof.id && r.estado !== "cancelada")
-        .map((r) => r.hora)
+      delDia.filter((r) => r.profesionalId === prof.id && r.estado !== "cancelada").map((r) => r.hora)
     );
-    const minimo = fecha === hoy ? `${String(ahora.getHours()).padStart(2, "0")}:${String(ahora.getMinutes()).padStart(2, "0")}` : "";
-    return horasDelProfesional(prof, fecha, esp.duracionMin).filter((h) => !ocupadas.has(h) && h > minimo);
-  }, [prof, esp, festivo, reservas, fecha, hoy, ahora]);
+    return horasDelProfesional(prof, fecha, esp.duracionMin).filter((h) => !ocupadas.has(h) && momento(fecha, h) > ahora);
+  }, [prof, esp, festivo, delDia, fecha, ahora]);
 
   const reiniciar = () => {
     setEspId("");
@@ -71,7 +71,7 @@ export default function NuevaReserva({
     setErrores({});
   };
 
-  const guardar = () => {
+  const guardar = async () => {
     const e: Record<string, string> = {};
     if (!esp) e.esp = "Elige especialidad";
     if (!prof) e.prof = "Elige profesional";
@@ -84,16 +84,15 @@ export default function NuevaReserva({
     setErrores(e);
     if (Object.keys(e).length) return;
 
-    const existentes = new Set(reservas(hoy, aISO(new Date(ahora.getTime() + 90 * 864e5))).map((r) => r.id));
-    const r: ReservaPanel = {
-      id: nuevoCodigo(existentes),
-      token: null,
+    const r: NuevaReservaPanel = {
       especialidadId: esp!.id,
       profesionalId: prof!.id,
       fecha,
       hora,
+      // Precio y anticipo actuales de la especialidad
+      precio: esp!.precio,
+      deposito: esp!.deposito,
       estado: pago === "recepcion" ? "confirmada" : "sin_deposito",
-      reembolso: false,
       metodoPago: pago === "recepcion" ? "recepcion" : null,
       paciente: {
         nombre: paciente.nombre.trim(),
@@ -103,12 +102,19 @@ export default function NuevaReserva({
         email: paciente.email.trim().toLowerCase(),
         motivo: paciente.motivo.trim(),
       },
-      creadaEl: new Date().toISOString(),
       origen: "panel",
     };
-    crearReserva(r);
+    setGuardando(true);
+    setErrorGuardar(null);
+    const { id, error } = await crearReserva(r);
+    setGuardando(false);
+    if (error || !id) {
+      setErrorGuardar(error ?? "No se pudo crear la cita.");
+      setHora("");
+      return;
+    }
     reiniciar();
-    onCreada(r);
+    onCreada({ ...r, id });
   };
 
   const campoTexto = (k: keyof typeof vacio, etiqueta: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
@@ -138,11 +144,14 @@ export default function NuevaReserva({
       pie={
         <div className="flex gap-2">
           <button type="button" onClick={onCerrar} className={`${btn.secundario} flex-1`}>Cancelar</button>
-          <button type="button" onClick={guardar} className={`${btn.primario} flex-1`}>Crear cita</button>
+          <button type="button" onClick={() => void guardar()} disabled={guardando} className={`${btn.primario} flex-1`}>
+            {guardando ? "Guardando…" : "Crear cita"}
+          </button>
         </div>
       }
     >
       <div className="space-y-5">
+        {errorGuardar && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{errorGuardar}</p>}
         <section className="space-y-3 rounded-2xl bg-white p-4 ring-1 ring-linea">
           <div>
             <label htmlFor="nr-esp" className="mb-1 block text-sm font-medium">Especialidad</label>

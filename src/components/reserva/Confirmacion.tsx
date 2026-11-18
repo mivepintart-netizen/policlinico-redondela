@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { fechaLarga } from "@/lib/agenda";
-import { contacto, especialidades, formatoEuros, profesionales } from "@/lib/datos";
+import { contacto, formatoEuros } from "@/lib/datos";
+import { useCatalogo } from "@/components/CatalogoProvider";
 import { AvisoCancelacion } from "./Resumen";
 import type { EstadoReserva } from "./tipos";
 
@@ -13,6 +14,7 @@ export default function Confirmacion({
   codigo: string;
   token: string | null;
 }) {
+  const { especialidades, profesionales } = useCatalogo();
   const esp = especialidades.find((e) => e.id === estado.especialidadId)!;
   const prof = profesionales.find((p) => p.id === estado.hueco!.profesionalId)!;
   const { fecha, hueco, datos } = estado;

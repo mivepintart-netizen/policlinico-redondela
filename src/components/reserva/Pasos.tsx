@@ -1,9 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import IlustracionEspecialidad from "@/components/IlustracionEspecialidad";
-import { especialidades, formatoEuros, profesionales, turnos, type DiaSemana } from "@/lib/datos";
-import { fechaLarga, huecosDelDia, type Hueco } from "@/lib/agenda";
+import { formatoEuros, turnos } from "@/lib/datos";
+import { aISO, claveHueco, fechaLarga, huecosDelDia, limiteReserva, type Hueco, type Ocupados } from "@/lib/agenda";
+import type { DiaSemana } from "@/lib/catalogo";
+import { mensajeError, supabaseNavegador } from "@/lib/supabase/cliente";
+import { useCatalogo } from "@/components/CatalogoProvider";
 import Calendario from "./Calendario";
 import type { DatosPaciente, MetodoPago } from "./tipos";
 
@@ -36,6 +39,7 @@ export function PasoEspecialidad({
   seleccionada: string | null;
   onElegir: (id: string) => void;
 }) {
+  const especialidades = useCatalogo().especialidades.filter((e) => e.activa);
   return (
     <>
       <TituloPaso titulo="¿Qué necesitas?" texto="Elige la especialidad. Verás el precio y el anticipo antes de confirmar." />
@@ -92,7 +96,7 @@ export function PasoProfesional({
   seleccionado: string | null | undefined;
   onElegir: (id: string | null) => void;
 }) {
-  const lista = profesionales.filter((p) => p.especialidadId === especialidadId);
+  const lista = useCatalogo().profesionales.filter((p) => p.activo && p.especialidadId === especialidadId);
 
   return (
     <>
@@ -155,8 +159,11 @@ export function PasoFecha({
   hueco,
   onFecha,
   onHueco,
+  recarga = 0,
   encabezado = true,
 }: {
+  /** Cambia este número para volver a pedir los huecos ocupados */
+  recarga?: number;
   /** false para usarlo dentro de otra página con su propio título */
   encabezado?: boolean;
   ahora: Date;
@@ -167,15 +174,64 @@ export function PasoFecha({
   onFecha: (iso: string) => void;
   onHueco: (h: Hueco) => void;
 }) {
+  const { especialidades, profesionales, festivos } = useCatalogo();
   const esp = especialidades.find((e) => e.id === especialidadId)!;
+  const [ocupados, setOcupados] = useState<Ocupados | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [reintento, setReintento] = useState(0);
 
-  // Cache simple de huecos por día para no recalcular en cada render
-  const cache = useMemo(() => new Map<string, Hueco[]>(), []);
+  // Huecos ocupados de esta especialidad hasta el límite de reserva
+  useEffect(() => {
+    let vigente = true;
+    setOcupados(null);
+    setError(null);
+    supabaseNavegador()
+      .rpc("horas_ocupadas", {
+        p_especialidad_id: especialidadId,
+        p_desde: aISO(ahora),
+        p_hasta: aISO(limiteReserva(ahora)),
+      })
+      .then(({ data, error: e }) => {
+        if (!vigente) return;
+        if (e) return setError(mensajeError(e, "No se pudieron cargar los huecos libres."));
+        setOcupados(new Set((data ?? []).map((o) => claveHueco(o.profesional_id, o.fecha, o.hora))));
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [especialidadId, ahora, recarga, reintento]);
+
+  // Huecos por día, calculados una vez por cada combinación
+  const cache = useMemo(() => new Map<string, Hueco[]>(), [ocupados, profesionalId]); // eslint-disable-line react-hooks/exhaustive-deps
   const obtener = (iso: string) => {
-    const k = `${profesionalId}|${iso}`;
-    if (!cache.has(k)) cache.set(k, huecosDelDia(especialidadId, profesionalId, iso, esp.duracionMin, ahora));
-    return cache.get(k)!;
+    if (!ocupados) return [];
+    if (!cache.has(iso)) {
+      cache.set(
+        iso,
+        huecosDelDia({ profesionales, festivos, ocupados, especialidadId, profesionalId, duracionMin: esp.duracionMin, iso, ahora })
+      );
+    }
+    return cache.get(iso)!;
   };
+
+  if (error) {
+    return (
+      <div role="alert" className="rounded-2xl bg-red-50 p-6 text-center text-sm text-red-700">
+        <p>{error}</p>
+        <button type="button" onClick={() => setReintento((n) => n + 1)} className="mt-3 font-semibold underline">
+          Reintentar
+        </button>
+      </div>
+    );
+  }
+  if (!ocupados) {
+    return (
+      <>
+        {encabezado && <TituloPaso titulo="Elige día y hora" texto="Buscando huecos libres…" />}
+        <div className="h-96 animate-pulse rounded-2xl bg-white ring-1 ring-linea" aria-busy="true" />
+      </>
+    );
+  }
 
   const huecos = fecha ? obtener(fecha) : [];
   const finManana = turnos.m.fin;
@@ -212,7 +268,7 @@ export function PasoFecha({
     <>
       {encabezado && <TituloPaso titulo="Elige día y hora" texto="Los días marcados tienen huecos libres." />}
       <div className="grid gap-6 xl:grid-cols-2">
-        <Calendario ahora={ahora} seleccionada={fecha} huecosPorDia={(iso) => obtener(iso).length} onElegir={onFecha} />
+        <Calendario ahora={ahora} festivos={festivos} seleccionada={fecha} huecosPorDia={(iso) => obtener(iso).length} onElegir={onFecha} />
 
         <div>
           {!fecha ? (

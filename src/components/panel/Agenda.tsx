@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { aISO, desdeISO, fechaLarga, sumarDias } from "@/lib/agenda";
-import { formatoEuros, turnos, type DiaSemana } from "@/lib/datos";
-import { ESTADOS, esActiva, type ReservaPanel } from "@/lib/panel";
+import { formatoEuros, turnos } from "@/lib/datos";
+import type { DiaSemana } from "@/lib/catalogo";
+import { ESTADOS, anticipoCobrado, esActiva, type ReservaPanel } from "@/lib/panel";
 import DetalleReserva from "./DetalleReserva";
 import EnviarEnlace from "./EnviarEnlace";
 import NuevaReserva from "./NuevaReserva";
-import { usePanel } from "./PanelProvider";
+import { usePanel, useReservas } from "./PanelProvider";
 import { BadgeEstado, Cabecera, Kpi, Toast, btn, claseCampoBase } from "./ui";
 
 const DIAS: DiaSemana[] = ["dom", "lun", "mar", "mie", "jue", "vie", "sab"];
@@ -25,7 +26,7 @@ const COLOR_BLOQUE: Record<ReservaPanel["estado"], string> = {
 };
 
 export default function Agenda() {
-  const { ahora, reservas, especialidades, profesionales, festivos } = usePanel();
+  const { ahora, especialidades, profesionales, festivos } = usePanel();
   const hoy = aISO(ahora);
   const [fecha, setFecha] = useState(hoy);
   const [filtroEsp, setFiltroEsp] = useState("");
@@ -36,7 +37,8 @@ export default function Agenda() {
   const [aviso, setAviso] = useState<string | null>(null);
   const cerrarAviso = useCallback(() => setAviso(null), []);
 
-  const delDia = useMemo(() => reservas(fecha, fecha), [reservas, fecha]);
+  const { reservas: cargadas, error: errorCarga, cargando } = useReservas(fecha, fecha);
+  const delDia = cargadas ?? [];
   const festivo = festivos.find((f) => f.fecha === fecha);
   const dia = DIAS[desdeISO(fecha).getDay()];
 
@@ -53,11 +55,8 @@ export default function Agenda() {
 
   // Cifras del día
   const activas = delDia.filter(esActiva);
-  const precio = (r: ReservaPanel) => especialidades.find((e) => e.id === r.especialidadId)?.precio ?? 0;
-  const deposito = (r: ReservaPanel) =>
-    r.estado === "sin_deposito" || !r.metodoPago ? 0 : especialidades.find((e) => e.id === r.especialidadId)?.deposito ?? 0;
-  const cobradoAnticipos = activas.reduce((s, r) => s + deposito(r), 0);
-  const pendienteClinica = activas.filter((r) => r.estado !== "completada").reduce((s, r) => s + precio(r) - deposito(r), 0);
+  const cobradoAnticipos = activas.reduce((s, r) => s + anticipoCobrado(r), 0);
+  const pendienteClinica = activas.filter((r) => r.estado !== "completada").reduce((s, r) => s + r.precio - anticipoCobrado(r), 0);
   const completadas = activas.filter((r) => r.estado === "completada").length;
   const sinAnticipo = activas.filter((r) => r.estado === "sin_deposito").length;
   const canceladas = delDia.length - activas.length;
@@ -124,6 +123,11 @@ export default function Agenda() {
           ))}
         </div>
       </div>
+
+      {errorCarga && (
+        <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{errorCarga}</p>
+      )}
+      {cargando && <p className="mt-4 text-sm text-tinta-tenue" aria-live="polite">Cargando citas…</p>}
 
       {/* Vista por columnas (escritorio) */}
       {columnas.length === 0 ? (

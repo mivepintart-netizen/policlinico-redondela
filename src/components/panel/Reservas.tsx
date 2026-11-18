@@ -3,11 +3,11 @@
 import { useCallback, useMemo, useState } from "react";
 import { aISO, desdeISO, sumarDias } from "@/lib/agenda";
 import { formatoEuros } from "@/lib/datos";
-import { ESTADOS, aCSV, type EstadoPanel, type ReservaPanel } from "@/lib/panel";
+import { ESTADOS, aCSV, anticipoCobrado, type EstadoPanel, type ReservaPanel } from "@/lib/panel";
 import DetalleReserva from "./DetalleReserva";
 import EnviarEnlace from "./EnviarEnlace";
 import NuevaReserva from "./NuevaReserva";
-import { usePanel } from "./PanelProvider";
+import { usePanel, useReservas } from "./PanelProvider";
 import { BadgeEstado, Cabecera, Toast, btn, claseCampoBase } from "./ui";
 
 type Rango = "hoy" | "proximos7" | "mes" | "ultimos30" | "personalizado";
@@ -16,7 +16,7 @@ const POR_PAGINA = 20;
 const quitarTildes = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 export default function Reservas() {
-  const { ahora, reservas, especialidades, profesionales } = usePanel();
+  const { ahora, especialidades, profesionales } = usePanel();
   const hoy = aISO(ahora);
 
   const [rango, setRango] = useState<Rango>("proximos7");
@@ -44,7 +44,8 @@ export default function Reservas() {
     }
   }, [rango, hoy, desdeP, hastaP]);
 
-  const todas = useMemo(() => reservas(desde, hasta), [reservas, desde, hasta]);
+  const { reservas: cargadas, error: errorCarga, cargando } = useReservas(desde, hasta);
+  const todas = useMemo(() => cargadas ?? [], [cargadas]);
 
   const filtradas = useMemo(() => {
     const q = quitarTildes(texto.trim());
@@ -155,6 +156,9 @@ export default function Reservas() {
         </select>
       </div>
 
+      {errorCarga && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{errorCarga}</p>}
+      {cargando && <p className="mt-4 text-sm text-tinta-tenue" aria-live="polite">Cargando reservas…</p>}
+
       {/* Tabla (escritorio) */}
       <div className="mt-4 hidden overflow-hidden rounded-2xl bg-white ring-1 ring-linea md:block">
         <table className="w-full text-left text-sm">
@@ -171,7 +175,7 @@ export default function Reservas() {
             {visibles.map((r) => {
               const e = especialidades.find((x) => x.id === r.especialidadId);
               const p = profesionales.find((x) => x.id === r.profesionalId);
-              const pagado = r.estado !== "sin_deposito" && !!r.metodoPago;
+              const pagado = anticipoCobrado(r) > 0;
               return (
                 <tr key={r.id} onClick={() => setAbierta(r)} className="cursor-pointer transition hover:bg-brand-50/50">
                   <td className="px-4 py-3">
@@ -190,7 +194,7 @@ export default function Reservas() {
                   </td>
                   <td className="px-4 py-3"><BadgeEstado estado={r.estado} /></td>
                   <td className="px-4 py-3 text-right tabular-nums">
-                    {pagado ? <span className="font-medium text-ambar-600">{formatoEuros(e?.deposito ?? 0)}</span> : <span className="text-tinta-tenue">—</span>}
+                    {pagado ? <span className="font-medium text-ambar-600">{formatoEuros(anticipoCobrado(r))}</span> : <span className="text-tinta-tenue">—</span>}
                     {r.estado === "cancelada" && pagado && (
                       <span className="block text-xs text-tinta-tenue">{r.reembolso ? "a devolver" : "no reembolsado"}</span>
                     )}

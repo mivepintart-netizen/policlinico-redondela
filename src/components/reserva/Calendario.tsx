@@ -1,17 +1,20 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { aISO, esFestivo, limiteReserva, nombreMes } from "@/lib/agenda";
+import { aISO, buscarFestivo, limiteReserva, nombreMes } from "@/lib/agenda";
+import type { Festivo } from "@/lib/catalogo";
 
 const CABECERA = ["L", "M", "X", "J", "V", "S", "D"];
 
 export default function Calendario({
   ahora,
+  festivos,
   seleccionada,
   huecosPorDia,
   onElegir,
 }: {
   ahora: Date;
+  festivos: Festivo[];
   seleccionada: string | null;
   /** Número de huecos libres de un día (0 = no disponible). */
   huecosPorDia: (iso: string) => number;
@@ -73,7 +76,7 @@ export default function Calendario({
         {celdas.map((dia, i) => {
           if (!dia) return <div key={`v${i}`} />;
           const iso = aISO(dia);
-          const festivo = esFestivo(iso);
+          const festivo = buscarFestivo(festivos, iso);
           const fueraDeRango = dia < hoy || dia > limite;
           const libres = fueraDeRango || festivo ? 0 : huecosPorDia(iso);
           const disponible = libres > 0;

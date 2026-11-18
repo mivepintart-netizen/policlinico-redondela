@@ -1,30 +1,23 @@
 /**
- * Cálculo de huecos libres a partir de los horarios (datos ficticios).
- * Cuando conectemos Supabase, los huecos ocupados vendrán de la
- * función `horas_ocupadas` en lugar de generarse aquí.
+ * Fechas y cálculo de huecos libres.
+ * Los huecos posibles salen del horario de cada profesional; los ocupados,
+ * de la función horas_ocupadas() de la base de datos.
  */
-import {
-  type DiaSemana,
-  type ProfesionalDemo,
-  diasReservables,
-  festivos,
-  profesionales,
-  turnos,
-} from "./datos";
+import { diasReservables, turnos } from "./datos";
+import type { DiaSemana, Festivo, Profesional } from "./catalogo";
 
 const DIAS: DiaSemana[] = ["dom", "lun", "mar", "mie", "jue", "vie", "sab"];
 
-export type Hueco = {
-  hora: string; // 'HH:MM'
-  profesionalId: string;
-};
+export type Hueco = { hora: string; profesionalId: string };
 
-/* ----- Fechas (siempre en hora local, formato 'YYYY-MM-DD') ----- */
+/** Huecos ocupados: claves "profesionalId|YYYY-MM-DD|HH:MM" */
+export type Ocupados = Set<string>;
+export const claveHueco = (profesionalId: string, fecha: string, hora: string) => `${profesionalId}|${fecha}|${hora}`;
+
+/* ----- Fechas (hora local, formato 'YYYY-MM-DD') ----- */
 
 export function aISO(d: Date) {
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dia = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${m}-${dia}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export function desdeISO(iso: string) {
@@ -38,97 +31,71 @@ export function sumarDias(d: Date, n: number) {
   return r;
 }
 
-function aMinutos(hora: string) {
-  const [h, m] = hora.split(":").map(Number);
-  return h * 60 + m;
-}
+export const aMinutos = (hora: string) => Number(hora.slice(0, 2)) * 60 + Number(hora.slice(3, 5));
+export const aHora = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
 
-function aHora(min: number) {
-  return `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
-}
-
-export function esFestivo(iso: string) {
-  return festivos.find((f) => f.fecha === iso);
-}
-
-/* ----- Ocupación ficticia, estable para el mismo día/hora ----- */
-
-export function hash(texto: string) {
-  let h = 2166136261;
-  for (let i = 0; i < texto.length; i++) {
-    h ^= texto.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return (h >>> 0) % 100;
-}
-
-export function estaOcupado(profesionalId: string, iso: string, hora: string) {
-  return hash(`${profesionalId}|${iso}|${hora}`) < 38;
-}
-
-/* ----- Huecos ----- */
-
-function huecosProfesional(
-  prof: ProfesionalDemo,
-  iso: string,
-  duracionMin: number,
-  ahora: Date
-): Hueco[] {
-  const fecha = desdeISO(iso);
-  const turno = prof.horario[DIAS[fecha.getDay()]];
-  if (!turno || esFestivo(iso)) return [];
-
-  // No se puede reservar con menos de 1 hora de antelación
-  const esHoy = iso === aISO(ahora);
-  const minimo = esHoy ? ahora.getHours() * 60 + ahora.getMinutes() + 60 : 0;
-
-  const franjas = turno === "mt" ? [turnos.m, turnos.t] : [turnos[turno]];
-  const resultado: Hueco[] = [];
-  for (const f of franjas) {
-    for (let t = aMinutos(f.inicio); t + duracionMin <= aMinutos(f.fin); t += duracionMin) {
-      const hora = aHora(t);
-      if (t < minimo || estaOcupado(prof.id, iso, hora)) continue;
-      resultado.push({ hora, profesionalId: prof.id });
-    }
-  }
-  return resultado;
-}
-
-/**
- * Huecos libres de un día. Si `profesionalId` es null ("cualquiera"),
- * junta los de todos los profesionales de la especialidad y deja uno por hora.
- */
-export function huecosDelDia(
-  especialidadId: string,
-  profesionalId: string | null,
-  iso: string,
-  duracionMin: number,
-  ahora: Date
-): Hueco[] {
-  const lista = profesionales.filter(
-    (p) => p.especialidadId === especialidadId && (!profesionalId || p.id === profesionalId)
-  );
-  const porHora = new Map<string, Hueco>();
-  for (const p of lista) {
-    for (const h of huecosProfesional(p, iso, duracionMin, ahora)) {
-      if (!porHora.has(h.hora)) porHora.set(h.hora, h);
-    }
-  }
-  return Array.from(porHora.values()).sort((a, b) => a.hora.localeCompare(b.hora));
+export function momento(fecha: string, hora: string) {
+  const d = desdeISO(fecha);
+  d.setHours(Number(hora.slice(0, 2)), Number(hora.slice(3, 5)), 0, 0);
+  return d;
 }
 
 export function limiteReserva(ahora: Date) {
   return sumarDias(new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()), diasReservables);
 }
 
+export const buscarFestivo = (festivos: Festivo[], iso: string) => festivos.find((f) => f.fecha === iso);
+
+/* ----- Huecos ----- */
+
+/** Todas las horas de inicio posibles de un profesional en un día (sin mirar ocupación). */
+export function horasDelProfesional(prof: Profesional, iso: string, duracionMin: number) {
+  const turno = prof.horario[DIAS[desdeISO(iso).getDay()]];
+  if (!turno) return [];
+  const franjas = turno === "mt" ? [turnos.m, turnos.t] : [turnos[turno]];
+  const horas: string[] = [];
+  for (const f of franjas) {
+    for (let t = aMinutos(f.inicio); t + duracionMin <= aMinutos(f.fin); t += duracionMin) horas.push(aHora(t));
+  }
+  return horas;
+}
+
+/**
+ * Huecos libres de un día para una especialidad. Con profesionalId = null
+ * ("el primero disponible") junta los de todos y deja uno por hora.
+ */
+export function huecosDelDia(opts: {
+  profesionales: Profesional[];
+  festivos: Festivo[];
+  ocupados: Ocupados;
+  especialidadId: string;
+  profesionalId: string | null;
+  duracionMin: number;
+  iso: string;
+  ahora: Date;
+}): Hueco[] {
+  const { iso, ahora } = opts;
+  if (buscarFestivo(opts.festivos, iso)) return [];
+  // Mínimo 1 hora de antelación (igual que en la base de datos)
+  const minimo = new Date(ahora.getTime() + 60 * 60 * 1000);
+
+  const porHora = new Map<string, Hueco>();
+  for (const p of opts.profesionales) {
+    if (!p.activo || p.especialidadId !== opts.especialidadId) continue;
+    if (opts.profesionalId && p.id !== opts.profesionalId) continue;
+    for (const hora of horasDelProfesional(p, iso, opts.duracionMin)) {
+      if (momento(iso, hora) < minimo) continue;
+      if (opts.ocupados.has(claveHueco(p.id, iso, hora))) continue;
+      if (!porHora.has(hora)) porHora.set(hora, { hora, profesionalId: p.id });
+    }
+  }
+  return Array.from(porHora.values()).sort((a, b) => a.hora.localeCompare(b.hora));
+}
+
 /* ----- Formatos en español ----- */
 
 export function fechaLarga(iso: string) {
-  const s = desdeISO(iso).toLocaleDateString("es-ES", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
+  const s = desdeISO(iso).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 

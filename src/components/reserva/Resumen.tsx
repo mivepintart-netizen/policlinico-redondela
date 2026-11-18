@@ -1,5 +1,6 @@
 import { fechaLarga, desdeISO, sumarDias } from "@/lib/agenda";
-import { especialidades, formatoEuros, profesionales } from "@/lib/datos";
+import { formatoEuros } from "@/lib/datos";
+import { useCatalogo } from "@/components/CatalogoProvider";
 import type { EstadoReserva } from "./tipos";
 
 /**
@@ -40,6 +41,7 @@ function Fila({ etiqueta, valor }: { etiqueta: string; valor: React.ReactNode })
 }
 
 export default function Resumen({ estado }: { estado: EstadoReserva }) {
+  const { especialidades, profesionales } = useCatalogo();
   const esp = especialidades.find((e) => e.id === estado.especialidadId);
   const profId = estado.hueco?.profesionalId ?? estado.profesionalId;
   const prof = profesionales.find((p) => p.id === profId);

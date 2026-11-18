@@ -3,15 +3,21 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fechaLarga, type Hueco } from "@/lib/agenda";
-import { contacto, especialidades, formatoEuros, profesionales } from "@/lib/datos";
-import {
-  actualizar,
-  dentroDePlazo,
-  estadoEfectivo,
-  momentoCita,
-  porToken,
-  type ReservaDemo,
-} from "@/lib/reservasDemo";
+import { contacto, formatoEuros } from "@/lib/datos";
+import { momento } from "@/lib/agenda";
+import type { CitaPaciente } from "@/lib/database.types";
+import { mensajeError, supabaseNavegador } from "@/lib/supabase/cliente";
+import { useCatalogo } from "@/components/CatalogoProvider";
+type EstadoVisible = "confirmada" | "cancelada" | "completada";
+
+/** Estado que ve el paciente: una cita activa cuya hora ya pasó se muestra como realizada. */
+function estadoEfectivo(r: CitaPaciente, ahora: Date): EstadoVisible {
+  if (r.estado === "cancelada" || r.estado === "completada") return r.estado;
+  return momento(r.fecha, r.hora) < ahora ? "completada" : "confirmada";
+}
+
+/** ¿Faltan más de 24 h? (se puede cambiar y cancelar con reembolso) */
+const dentroDePlazo = (r: CitaPaciente, ahora: Date) => momento(r.fecha, r.hora).getTime() - ahora.getTime() > 24 * 3600 * 1000;
 import { PasoFecha } from "@/components/reserva/Pasos";
 import { AvisoCancelacion } from "@/components/reserva/Resumen";
 import { descargarIcs } from "./calendarioIcs";
@@ -42,12 +48,14 @@ function DialogoCancelar({
   deposito,
   onCerrar,
   onConfirmar,
+  ocupado = false,
 }: {
-  reserva: ReservaDemo;
+  reserva: CitaPaciente;
   conReembolso: boolean;
   deposito: number;
   onCerrar: () => void;
   onConfirmar: () => void;
+  ocupado?: boolean;
 }) {
   const botonCerrar = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -90,8 +98,8 @@ function DialogoCancelar({
           <button ref={botonCerrar} type="button" onClick={onCerrar} className="rounded-xl px-5 py-3 font-medium text-tinta transition hover:bg-brand-50">
             No, mantener cita
           </button>
-          <button type="button" onClick={onConfirmar} className="rounded-xl bg-red-600 px-5 py-3 font-semibold text-white transition hover:bg-red-700">
-            Sí, cancelar cita
+          <button type="button" onClick={onConfirmar} disabled={ocupado} className="rounded-xl bg-red-600 disabled:opacity-60 px-5 py-3 font-semibold text-white transition hover:bg-red-700">
+            {ocupado ? "Cancelando…" : "Sí, cancelar cita"}
           </button>
         </div>
       </div>
@@ -105,20 +113,42 @@ function DialogoCancelar({
 
 export default function DetalleCita({ token }: { token: string }) {
   const [ahora, setAhora] = useState<Date | null>(null);
-  const [reserva, setReserva] = useState<ReservaDemo | null | undefined>(undefined);
+  const { especialidades, profesionales } = useCatalogo();
+  const [reserva, setReserva] = useState<CitaPaciente | null | undefined>(undefined);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
+  const [errorAccion, setErrorAccion] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState(false);
   const [aviso, setAviso] = useState<Aviso>(null);
   const [cancelando, setCancelando] = useState(false);
   const [cambiando, setCambiando] = useState(false);
   const [nuevaFecha, setNuevaFecha] = useState<string | null>(null);
   const [nuevoHueco, setNuevoHueco] = useState<Hueco | null>(null);
+  const [recargaHuecos, setRecargaHuecos] = useState(0);
 
   useEffect(() => {
-    const n = new Date();
-    setAhora(n);
-    setReserva(porToken(token, n));
+    setAhora(new Date());
+    supabaseNavegador()
+      .rpc("obtener_reserva_por_token", { p_token: token })
+      .then(({ data, error }) => {
+        if (error) return setErrorCarga(mensajeError(error, "No se pudo cargar tu cita."));
+        setReserva(data?.[0] ?? null);
+      });
   }, [token]);
 
+  const recargar = async () => {
+    const { data } = await supabaseNavegador().rpc("obtener_reserva_por_token", { p_token: token });
+    if (data?.[0]) setReserva(data[0]);
+  };
+
   const cerrarCancelar = useCallback(() => setCancelando(false), []);
+
+  if (errorCarga) {
+    return (
+      <div role="alert" className="mx-auto max-w-md rounded-2xl bg-red-50 p-6 text-center text-red-700">
+        {errorCarga}
+      </div>
+    );
+  }
 
   if (reserva === undefined || !ahora) {
     return <div className="mx-auto h-96 max-w-5xl animate-pulse rounded-2xl bg-white ring-1 ring-linea" />;
@@ -138,38 +168,63 @@ export default function DetalleCita({ token }: { token: string }) {
     );
   }
 
-  const esp = especialidades.find((e) => e.id === reserva.especialidadId)!;
-  const prof = profesionales.find((p) => p.id === reserva.profesionalId);
+  const esp = especialidades.find((e) => e.id === reserva.especialidad_id) ?? {
+    id: reserva.especialidad_id, nombre: "Consulta", duracionMin: 30,
+  };
+  const prof = profesionales.find((p) => p.id === reserva.profesional_id);
+  // Precio y anticipo guardados en la reserva (los de la especialidad pueden haber cambiado)
+  const anticipo = reserva.metodo_pago && reserva.estado !== "sin_deposito" ? reserva.deposito : 0;
+  const pendiente = reserva.precio - anticipo;
   const estado = estadoEfectivo(reserva, ahora);
   const enPlazo = dentroDePlazo(reserva, ahora);
   const activa = estado === "confirmada";
 
-  const confirmarCancelacion = () => {
-    const cambios = { estado: "cancelada" as const, reembolso: enPlazo };
-    actualizar(reserva.token, cambios);
-    setReserva({ ...reserva, ...cambios });
+  const confirmarCancelacion = async () => {
+    setOcupado(true);
+    setErrorAccion(null);
+    const { data: devuelto, error } = await supabaseNavegador().rpc("cancelar_reserva_por_token", { p_token: token });
+    setOcupado(false);
     setCancelando(false);
+    if (error) {
+      setErrorAccion(mensajeError(error, "No se pudo cancelar la cita."));
+      return;
+    }
+    await recargar();
     setAviso({
       tipo: "info",
-      texto: enPlazo
-        ? `Cita cancelada. Te devolveremos ${formatoEuros(esp.deposito)} en 3–5 días hábiles.`
-        : "Cita cancelada. Al ser con menos de 24 horas, el anticipo no se devuelve.",
+      texto: devuelto
+        ? `Cita cancelada. Te devolveremos ${formatoEuros(anticipo)} en 3–5 días hábiles.`
+        : anticipo > 0
+          ? "Cita cancelada. Al ser con menos de 24 horas, el anticipo no se devuelve."
+          : "Cita cancelada.",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const confirmarCambio = () => {
+  const confirmarCambio = async () => {
     if (!nuevaFecha || !nuevoHueco) return;
-    const cambios = { fecha: nuevaFecha, hora: nuevoHueco.hora, profesionalId: nuevoHueco.profesionalId };
-    actualizar(reserva.token, cambios);
-    setReserva({ ...reserva, ...cambios });
+    setOcupado(true);
+    setErrorAccion(null);
+    const { error } = await supabaseNavegador().rpc("cambiar_reserva_por_token", {
+      p_token: token,
+      p_fecha: nuevaFecha,
+      p_hora: nuevoHueco.hora,
+    });
+    setOcupado(false);
+    if (error) {
+      setErrorAccion(mensajeError(error, "No se pudo cambiar la cita."));
+      setNuevoHueco(null);
+      setRecargaHuecos((n) => n + 1);
+      return;
+    }
+    await recargar();
     setCambiando(false);
-    setNuevaFecha(null);
-    setNuevoHueco(null);
     setAviso({
       tipo: "ok",
-      texto: `Cita cambiada al ${fechaLarga(nuevaFecha).toLowerCase()} a las ${nuevoHueco.hora}. Te hemos enviado un email con los nuevos datos.`,
+      texto: `Cita cambiada al ${fechaLarga(nuevaFecha).toLowerCase()} a las ${nuevoHueco.hora}.`,
     });
+    setNuevaFecha(null);
+    setNuevoHueco(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -186,12 +241,16 @@ export default function DetalleCita({ token }: { token: string }) {
       </Link>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <h1 className="text-3xl font-semibold tracking-tight">Hola, {reserva.paciente.nombre}</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Hola, {reserva.paciente_nombre}</h1>
         <span className={`rounded-full px-3 py-1 text-sm font-medium ring-1 ${etiqueta.clase}`}>{etiqueta.texto}</span>
       </div>
       <p className="mt-1 text-tinta-suave">
         Reserva <span className="font-mono font-medium text-tinta">{reserva.id}</span>
       </p>
+
+      {errorAccion && (
+        <p role="alert" className="mt-6 rounded-2xl bg-red-50 p-4 text-sm text-red-700">{errorAccion}</p>
+      )}
 
       {aviso && (
         <div
@@ -220,7 +279,8 @@ export default function DetalleCita({ token }: { token: string }) {
               encabezado={false}
               ahora={ahora}
               especialidadId={esp.id}
-              profesionalId={reserva.profesionalId}
+              profesionalId={reserva.profesional_id}
+              recarga={recargaHuecos}
               fecha={nuevaFecha}
               hueco={nuevoHueco}
               onFecha={(iso) => {
@@ -244,8 +304,8 @@ export default function DetalleCita({ token }: { token: string }) {
             </button>
             <button
               type="button"
-              onClick={confirmarCambio}
-              disabled={!nuevoHueco || mismoHueco}
+              onClick={() => void confirmarCambio()}
+              disabled={!nuevoHueco || mismoHueco || ocupado}
               className="rounded-xl bg-brand-500 px-6 py-3.5 font-semibold text-white shadow-sm transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:bg-tinta-tenue/40 disabled:shadow-none"
             >
               {nuevoHueco && !mismoHueco
@@ -293,7 +353,7 @@ export default function DetalleCita({ token }: { token: string }) {
             <dl className="grid grid-cols-2 gap-3 p-6 text-sm">
               <div className="rounded-xl bg-ambar-50 p-3">
                 <dt className="text-ambar-700">Anticipo pagado</dt>
-                <dd className="text-xl font-semibold tabular-nums text-ambar-600">{formatoEuros(esp.deposito)}</dd>
+                <dd className="text-xl font-semibold tabular-nums text-ambar-600">{formatoEuros(anticipo)}</dd>
                 {estado === "cancelada" && (
                   <dd className="mt-1 text-xs text-ambar-700">{reserva.reembolso ? "Reembolsado" : "No reembolsable"}</dd>
                 )}
@@ -301,7 +361,7 @@ export default function DetalleCita({ token }: { token: string }) {
               <div className="rounded-xl bg-fondo p-3">
                 <dt className="text-tinta-suave">{estado === "cancelada" ? "Ya no tienes que pagar" : "A pagar en la clínica"}</dt>
                 <dd className={`text-xl font-semibold tabular-nums ${estado === "cancelada" ? "text-tinta-tenue line-through" : ""}`}>
-                  {formatoEuros(esp.precio - esp.deposito)}
+                  {formatoEuros(pendiente)}
                 </dd>
               </div>
             </dl>
@@ -359,9 +419,9 @@ export default function DetalleCita({ token }: { token: string }) {
                         descargarIcs({
                           id: reserva.id,
                           titulo: `${esp.nombre} · Policlínico Redondela`,
-                          inicio: momentoCita(reserva),
+                          inicio: momento(reserva.fecha, reserva.hora),
                           duracionMin: esp.duracionMin,
-                          descripcion: `Reserva ${reserva.id}${prof ? ` con ${prof.nombre}` : ""}. Pendiente de pago en la clínica: ${formatoEuros(esp.precio - esp.deposito)}.`,
+                          descripcion: `Reserva ${reserva.id}${prof ? ` con ${prof.nombre}` : ""}. Pendiente de pago en la clínica: ${formatoEuros(pendiente)}.`,
                         })
                       }
                       className="flex w-full items-center gap-3 rounded-xl p-4 text-left transition hover:bg-brand-50"
@@ -401,7 +461,7 @@ export default function DetalleCita({ token }: { token: string }) {
                       <span>
                         <span className="block font-semibold">Cancelar cita</span>
                         <span className="block text-sm text-red-700/70">
-                          {enPlazo ? `Te devolvemos ${formatoEuros(esp.deposito)}` : "Sin reembolso del anticipo"}
+                          {anticipo === 0 ? "Sin coste" : enPlazo ? `Te devolvemos ${formatoEuros(anticipo)}` : "Sin reembolso del anticipo"}
                         </span>
                       </span>
                     </button>
@@ -416,7 +476,7 @@ export default function DetalleCita({ token }: { token: string }) {
                 <p className="mt-1 text-sm text-tinta-suave">
                   {estado === "cancelada"
                     ? reserva.reembolso
-                      ? `El anticipo de ${formatoEuros(esp.deposito)} se devuelve en 3–5 días hábiles.`
+                      ? `El anticipo de ${formatoEuros(anticipo)} se devuelve en 3–5 días hábiles.`
                       : "Se canceló con menos de 24 horas, así que el anticipo no se devolvió."
                     : "Esperamos que todo fuera bien. ¿Necesitas otra cita?"}
                 </p>
@@ -448,10 +508,11 @@ export default function DetalleCita({ token }: { token: string }) {
       {cancelando && (
         <DialogoCancelar
           reserva={reserva}
-          conReembolso={enPlazo}
-          deposito={esp.deposito}
+          conReembolso={enPlazo && anticipo > 0}
+          deposito={anticipo}
           onCerrar={cerrarCancelar}
-          onConfirmar={confirmarCancelacion}
+          onConfirmar={() => void confirmarCancelacion()}
+          ocupado={ocupado}
         />
       )}
     </div>

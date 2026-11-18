@@ -1,278 +1,122 @@
 /**
- * Tipos de la base de datos de Supabase.
- * Escritos a mano siguiendo el formato de `supabase gen types typescript`.
- * Si cambias el esquema, actualízalos (o regenéralos con la CLI de Supabase).
+ * Tipos de la base de datos (supabase/migrations/20261117000000_esquema_inicial.sql).
+ * Si cambias el esquema, actualízalos o regenéralos con `supabase gen types`.
  */
 
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[];
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
-/** Días de la semana usados en el horario de un profesional. */
 export type DiaSemana = "lun" | "mar" | "mie" | "jue" | "vie" | "sab" | "dom";
-
-/** Turno: m = mañana, t = tarde, mt = mañana y tarde. */
+/** m = mañana, t = tarde, mt = mañana y tarde */
 export type Turno = "m" | "t" | "mt";
-
-/** Horario semanal: solo aparecen los días en que trabaja. */
 export type Horario = Partial<Record<DiaSemana, Turno>>;
 
-export type EspecialidadId =
-  | "fisioterapia"
-  | "traumatologia"
-  | "psicologia"
-  | "podologia"
-  | "cardiologia"
-  | "nutricion";
-
-export type EstadoReserva =
-  | "confirmada"
-  | "sin_deposito"
-  | "cancelada"
-  | "completada";
-
+export type EstadoReserva = "confirmada" | "sin_deposito" | "cancelada" | "completada";
+export type MetodoPago = "tarjeta" | "bizum" | "recepcion";
 export type RolPanel = "admin" | "secretaria";
+
+type Tabla<Row, Requeridos extends keyof Row> = {
+  Row: Row;
+  Insert: Pick<Row, Requeridos> & Partial<Omit<Row, Requeridos>>;
+  Update: Partial<Row>;
+  Relationships: [];
+};
+
+export type FilaEspecialidad = {
+  id: string;
+  nombre: string;
+  descripcion_corta: string;
+  duracion_min: number;
+  precio: number;
+  deposito: number;
+  activa: boolean;
+  orden: number;
+};
+
+export type FilaProfesional = {
+  id: string;
+  nombre: string;
+  rol: string;
+  especialidad_id: string;
+  horario: Horario;
+  activo: boolean;
+  orden: number;
+};
+
+export type FilaFestivo = { fecha: string; descripcion: string };
+
+export type FilaUsuarioPanel = { id: string; nombre: string; rol: RolPanel; created_at: string };
+
+export type FilaReserva = {
+  id: string;
+  especialidad_id: string;
+  profesional_id: string;
+  fecha: string;
+  hora: string;
+  precio: number;
+  deposito: number;
+  estado: EstadoReserva;
+  metodo_pago: MetodoPago | null;
+  reembolso: boolean;
+  paciente_nombre: string;
+  paciente_apellidos: string;
+  paciente_dni: string;
+  paciente_telefono: string;
+  paciente_email: string;
+  paciente_motivo: string;
+  origen: "web" | "panel";
+  token_acceso: string;
+  created_at: string;
+};
+
+/** Lo que devuelve obtener_reserva_por_token (sin DNI, teléfono ni motivo). */
+export type CitaPaciente = Pick<
+  FilaReserva,
+  | "id" | "especialidad_id" | "profesional_id" | "fecha" | "hora" | "precio" | "deposito" | "estado"
+  | "metodo_pago" | "reembolso" | "paciente_nombre" | "paciente_apellidos" | "paciente_email" | "token_acceso"
+>;
 
 export type Database = {
   public: {
     Tables: {
-      especialidades: {
-        Row: {
-          id: string;
-          nombre: string;
-          descripcion_corta: string;
-          descripcion_larga: string;
-          duracion_min: number;
-          precio: number;
-          deposito: number;
-          activa: boolean;
-        };
-        Insert: {
-          id: string;
-          nombre: string;
-          descripcion_corta?: string;
-          descripcion_larga?: string;
-          duracion_min: number;
-          precio: number;
-          deposito?: number;
-          activa?: boolean;
-        };
-        Update: {
-          id?: string;
-          nombre?: string;
-          descripcion_corta?: string;
-          descripcion_larga?: string;
-          duracion_min?: number;
-          precio?: number;
-          deposito?: number;
-          activa?: boolean;
-        };
-        Relationships: [];
-      };
-      profesionales: {
-        Row: {
-          id: string;
-          nombre: string;
-          rol: string;
-          especialidad_id: string;
-          horario: Horario;
-          activo: boolean;
-        };
-        Insert: {
-          id: string;
-          nombre: string;
-          rol: string;
-          especialidad_id: string;
-          horario?: Horario;
-          activo?: boolean;
-        };
-        Update: {
-          id?: string;
-          nombre?: string;
-          rol?: string;
-          especialidad_id?: string;
-          horario?: Horario;
-          activo?: boolean;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "profesionales_especialidad_id_fkey";
-            columns: ["especialidad_id"];
-            isOneToOne: false;
-            referencedRelation: "especialidades";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      festivos: {
-        Row: {
-          fecha: string; // 'YYYY-MM-DD'
-          descripcion: string;
-        };
-        Insert: {
-          fecha: string;
-          descripcion?: string;
-        };
-        Update: {
-          fecha?: string;
-          descripcion?: string;
-        };
-        Relationships: [];
-      };
-      reservas: {
-        Row: {
-          id: string; // 'RDN-12345'
-          especialidad_id: string;
-          profesional_id: string;
-          fecha: string; // 'YYYY-MM-DD'
-          hora: string; // 'HH:MM'
-          precio: number;
-          deposito: number;
-          estado: EstadoReserva;
-          metodo_pago: string | null;
-          reembolso: boolean;
-          paciente_nombre: string;
-          paciente_apellidos: string;
-          paciente_dni: string;
-          paciente_telefono: string;
-          paciente_email: string;
-          paciente_motivo: string | null;
-          token_acceso: string; // UUID
-          created_at: string;
-        };
-        Insert: {
-          /** Lo genera la base de datos si se omite. */
-          id?: string;
-          especialidad_id: string;
-          profesional_id: string;
-          fecha: string;
-          hora: string;
-          /** Desde la web pública los fija la BD a partir de la especialidad. */
-          precio?: number;
-          deposito?: number;
-          estado?: EstadoReserva;
-          metodo_pago?: string | null;
-          reembolso?: boolean;
-          paciente_nombre: string;
-          paciente_apellidos: string;
-          paciente_dni: string;
-          paciente_telefono: string;
-          paciente_email: string;
-          paciente_motivo?: string | null;
-          /** Genéralo en el cliente (crypto.randomUUID()) para poder recuperar la cita. */
-          token_acceso?: string;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          especialidad_id?: string;
-          profesional_id?: string;
-          fecha?: string;
-          hora?: string;
-          precio?: number;
-          deposito?: number;
-          estado?: EstadoReserva;
-          metodo_pago?: string | null;
-          reembolso?: boolean;
-          paciente_nombre?: string;
-          paciente_apellidos?: string;
-          paciente_dni?: string;
-          paciente_telefono?: string;
-          paciente_email?: string;
-          paciente_motivo?: string | null;
-          token_acceso?: string;
-          created_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "reservas_especialidad_id_fkey";
-            columns: ["especialidad_id"];
-            isOneToOne: false;
-            referencedRelation: "especialidades";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "reservas_profesional_id_fkey";
-            columns: ["profesional_id"];
-            isOneToOne: false;
-            referencedRelation: "profesionales";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      usuarios_panel: {
-        Row: {
-          id: string; // uuid de auth.users
-          nombre: string;
-          rol: RolPanel;
-          created_at: string;
-        };
-        Insert: {
-          id: string;
-          nombre: string;
-          rol: RolPanel;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          nombre?: string;
-          rol?: RolPanel;
-          created_at?: string;
-        };
-        Relationships: [];
-      };
+      especialidades: Tabla<FilaEspecialidad, "id" | "nombre" | "duracion_min" | "precio">;
+      profesionales: Tabla<FilaProfesional, "id" | "nombre" | "rol" | "especialidad_id">;
+      festivos: Tabla<FilaFestivo, "fecha">;
+      usuarios_panel: Tabla<FilaUsuarioPanel, "id" | "nombre" | "rol">;
+      reservas: Tabla<
+        FilaReserva,
+        "especialidad_id" | "profesional_id" | "fecha" | "hora" | "precio" | "deposito" | "paciente_nombre" | "paciente_apellidos" | "paciente_telefono"
+      >;
     };
-    Views: {
-      [_ in never]: never;
-    };
+    Views: { [_ in never]: never };
     Functions: {
-      es_usuario_panel: {
-        Args: Record<PropertyKey, never>;
-        Returns: boolean;
-      };
-      es_admin: {
-        Args: Record<PropertyKey, never>;
-        Returns: boolean;
-      };
-      generar_id_reserva: {
-        Args: Record<PropertyKey, never>;
-        Returns: string;
-      };
       horas_ocupadas: {
-        Args: { p_profesional_id: string; p_desde: string; p_hasta: string };
-        Returns: { fecha: string; hora: string }[];
+        Args: { p_especialidad_id: string; p_desde: string; p_hasta: string };
+        Returns: { profesional_id: string; fecha: string; hora: string }[];
       };
-      obtener_reserva_por_token: {
-        Args: { p_token: string };
-        Returns: Database["public"]["Tables"]["reservas"]["Row"][];
+      crear_reserva: {
+        Args: {
+          p_especialidad_id: string;
+          p_profesional_id: string;
+          p_fecha: string;
+          p_hora: string;
+          p_nombre: string;
+          p_apellidos: string;
+          p_dni: string;
+          p_telefono: string;
+          p_email: string;
+          p_motivo: string;
+          p_metodo_pago: string;
+        };
+        Returns: { id: string; token_acceso: string }[];
       };
+      obtener_reserva_por_token: { Args: { p_token: string }; Returns: CitaPaciente[] };
+      buscar_reserva: { Args: { p_codigo: string; p_email: string }; Returns: string | null };
+      cancelar_reserva_por_token: { Args: { p_token: string }; Returns: boolean };
+      cambiar_reserva_por_token: { Args: { p_token: string; p_fecha: string; p_hora: string }; Returns: undefined };
+      es_usuario_panel: { Args: Record<PropertyKey, never>; Returns: boolean };
+      es_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
     };
-    Enums: {
-      [_ in never]: never;
-    };
-    CompositeTypes: {
-      [_ in never]: never;
-    };
+    Enums: { [_ in never]: never };
+    CompositeTypes: { [_ in never]: never };
   };
 };
-
-/* ----- Atajos ----- */
-
-type PublicSchema = Database["public"];
-
-export type Tables<T extends keyof PublicSchema["Tables"]> =
-  PublicSchema["Tables"][T]["Row"];
-export type TablesInsert<T extends keyof PublicSchema["Tables"]> =
-  PublicSchema["Tables"][T]["Insert"];
-export type TablesUpdate<T extends keyof PublicSchema["Tables"]> =
-  PublicSchema["Tables"][T]["Update"];
-
-export type Especialidad = Tables<"especialidades">;
-export type Profesional = Tables<"profesionales">;
-export type Festivo = Tables<"festivos">;
-export type Reserva = Tables<"reservas">;
-export type UsuarioPanel = Tables<"usuarios_panel">;
