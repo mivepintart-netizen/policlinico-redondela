@@ -129,6 +129,12 @@ export default function Asistente({ especialidadInicial }: { especialidadInicial
     setPagando(false);
     setToken(fila.token_acceso);
     setCodigo(fila.id);
+    // Email de confirmación (si falla, la reserva sigue hecha)
+    void fetch("/api/cita/confirmada", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: fila.token_acceso }),
+    }).catch(() => undefined);
   };
 
   const siguiente = () => {

@@ -6,6 +6,7 @@ import { fechaLarga } from "../agenda";
 import { supabaseAdmin } from "./admin";
 import { clienteStripe } from "./stripe";
 import { supabaseServidor } from "../supabase/servidor";
+import { enviarEmailCita } from "./email";
 
 export class ErrorPago extends Error {
   constructor(mensaje: string, public estado = 400) {
@@ -65,7 +66,7 @@ export async function iniciarPago(token: string, origen: string) {
  * Aplica una sesión de pago completada (desde la vuelta del paciente o desde
  * el webhook; puede llegar dos veces y no pasa nada).
  */
-export async function aplicarSesionPagada(sesion: Stripe.Checkout.Session) {
+export async function aplicarSesionPagada(sesion: Stripe.Checkout.Session, origen: string) {
   const reservaId = sesion.metadata?.reserva_id;
   const token = sesion.metadata?.token ?? null;
   if (!reservaId || sesion.payment_status !== "paid") return { estado: "sin_pagar" as const, token };
@@ -85,6 +86,7 @@ export async function aplicarSesionPagada(sesion: Stripe.Checkout.Session) {
     await devolverPago(pi, `caducada-${reservaId}`);
     return { estado: "caducada" as const, token };
   }
+  await enviarEmailCita("confirmacion", reservaId, origen);
   return { estado: "confirmada" as const, token };
 }
 

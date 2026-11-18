@@ -21,7 +21,7 @@ export async function POST(req: Request) {
 
   try {
     if (evento.type === "checkout.session.completed" || evento.type === "checkout.session.async_payment_succeeded") {
-      await aplicarSesionPagada(evento.data.object as Stripe.Checkout.Session);
+      await aplicarSesionPagada(evento.data.object as Stripe.Checkout.Session, new URL(req.url).origin);
     }
     // checkout.session.expired: no hace falta nada, el hueco se libera solo
     return NextResponse.json({ recibido: true });

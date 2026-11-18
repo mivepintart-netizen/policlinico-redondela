@@ -34,6 +34,8 @@ type Contexto = {
   crearReserva: (r: NuevaReservaPanel) => Promise<{ id?: string; error: Resultado }>;
   /** Devuelve en la pasarela el anticipo de una reserva ya cancelada con reembolso */
   reembolsar: (id: string) => Promise<Resultado>;
+  /** Envía un email al paciente (no bloquea; devuelve si se envió) */
+  avisarPaciente: (id: string, tipo: "cancelacion" | "cambio", reembolso?: boolean) => Promise<boolean>;
 
   guardarProfesional: (p: Profesional, nuevo?: boolean) => Promise<Resultado>;
   guardarEspecialidades: (e: Especialidad[]) => Promise<Resultado>;
@@ -232,10 +234,17 @@ export default function PanelProvider({ children }: { children: React.ReactNode 
             paciente_motivo: r.paciente.motivo,
             origen: "panel",
           })
-          .select("id")
+          .select("id, token_acceso")
           .single();
         if (res.error?.code === "23505") return { error: "Alguien acaba de ocupar ese hueco. Elige otra hora." };
         const error = tras(res, "No se pudo crear la cita.");
+        if (!error && res.data && r.paciente.email) {
+          void fetch("/api/cita/confirmada", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: res.data.token_acceso }),
+          }).catch(() => undefined);
+        }
         return { id: res.data?.id, error };
       },
 
@@ -249,6 +258,17 @@ export default function PanelProvider({ children }: { children: React.ReactNode 
         if (!res) return "No hay conexión. La devolución no se ha hecho.";
         const cuerpo = (await res.json().catch(() => ({}))) as { error?: string };
         return res.ok ? null : cuerpo.error ?? "No se pudo hacer la devolución.";
+      },
+
+      avisarPaciente: async (id, tipo, reembolso) => {
+        const { data } = await sb.auth.getSession();
+        const res = await fetch("/api/panel/email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token ?? ""}` },
+          body: JSON.stringify({ id, tipo, reembolso }),
+        }).catch(() => null);
+        const cuerpo = (await res?.json().catch(() => ({}))) as { enviado?: boolean } | undefined;
+        return !!cuerpo?.enviado;
       },
 
       guardarProfesional: async (p, nuevo = false) => {

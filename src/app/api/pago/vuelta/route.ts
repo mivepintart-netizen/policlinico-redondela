@@ -11,7 +11,7 @@ export async function GET(req: Request) {
 
   try {
     const sesion = await stripe.checkout.sessions.retrieve(id);
-    const { estado, token } = await aplicarSesionPagada(sesion);
+    const { estado, token } = await aplicarSesionPagada(sesion, url.origin);
     if (!token) return NextResponse.redirect(new URL("/mi-zona", url.origin));
     const pago = estado === "confirmada" ? "ok" : estado === "caducada" ? "caducado" : "pendiente";
     return NextResponse.redirect(new URL(`/mi-zona/cita/${token}?pago=${pago}`, url.origin));

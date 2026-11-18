@@ -69,6 +69,7 @@ export type FilaReserva = {
   expira_en: string | null;
   pago_ref: string | null;
   pago_sesion: string | null;
+  email_confirmacion_at: string | null;
 };
 
 export type FilaAjustes = { id: boolean; pago_online: boolean };

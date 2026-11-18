@@ -34,7 +34,7 @@ export default function DetalleReserva({
   onCerrar: () => void;
   onAviso: (texto: string) => void;
 }) {
-  const { especialidades, profesionales, actualizarReserva, reembolsar, ahora } = usePanel();
+  const { especialidades, profesionales, actualizarReserva, reembolsar, avisarPaciente, ahora } = usePanel();
   const [cancelando, setCancelando] = useState(false);
   const [devolver, setDevolver] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -70,6 +70,10 @@ export default function DetalleReserva({
         return;
       }
       texto += " · anticipo devuelto a la tarjeta";
+    }
+    // Avisar al paciente de la cancelación (si tiene email y la cita estaba en pie)
+    if (cambios.estado === "cancelada" && r.paciente.email && r.estado !== "pendiente_pago") {
+      if (await avisarPaciente(r.id, "cancelacion", !!cambios.reembolso)) texto += " · paciente avisado por email";
     }
     setGuardando(false);
     onAviso(texto);

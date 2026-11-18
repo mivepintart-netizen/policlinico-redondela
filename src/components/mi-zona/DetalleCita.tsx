@@ -242,14 +242,15 @@ export default function DetalleCita({ token }: { token: string }) {
     if (!nuevaFecha || !nuevoHueco) return;
     setOcupado(true);
     setErrorAccion(null);
-    const { error } = await supabaseNavegador().rpc("cambiar_reserva_por_token", {
-      p_token: token,
-      p_fecha: nuevaFecha,
-      p_hora: nuevoHueco.hora,
-    });
+    const res = await fetch("/api/cita/cambiar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, fecha: nuevaFecha, hora: nuevoHueco.hora }),
+    }).catch(() => null);
+    const cuerpo = (await res?.json().catch(() => ({}))) as { error?: string } | undefined;
     setOcupado(false);
-    if (error) {
-      setErrorAccion(mensajeError(error, "No se pudo cambiar la cita."));
+    if (!res?.ok) {
+      setErrorAccion(cuerpo?.error ?? "No se pudo cambiar la cita. Revisa tu conexión.");
       setNuevoHueco(null);
       setRecargaHuecos((n) => n + 1);
       return;
@@ -258,7 +259,7 @@ export default function DetalleCita({ token }: { token: string }) {
     setCambiando(false);
     setAviso({
       tipo: "ok",
-      texto: `Cita cambiada al ${fechaLarga(nuevaFecha).toLowerCase()} a las ${nuevoHueco.hora}.`,
+      texto: `Cita cambiada al ${fechaLarga(nuevaFecha).toLowerCase()} a las ${nuevoHueco.hora}. Te hemos enviado un email con los nuevos datos.`,
     });
     setNuevaFecha(null);
     setNuevoHueco(null);

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { mensajeError } from "@/lib/supabase/errores";
 import { supabaseServidor } from "@/lib/supabase/servidor";
 import { reembolsarReserva } from "@/lib/servidor/pagos";
+import { enviarEmailCita } from "@/lib/servidor/email";
 
 /** El paciente cancela desde su enlace; si procede, se le devuelve el anticipo. */
 export async function POST(req: Request) {
@@ -26,6 +27,10 @@ export async function POST(req: Request) {
       console.error("devolución", r.id, e);
       devolucionPendiente = true;
     }
+  }
+  // Solo avisamos de citas que estaban confirmadas (no de reservas sin pagar)
+  if (r.estado !== "pendiente_pago") {
+    await enviarEmailCita("cancelacion", r.id, new URL(req.url).origin, { reembolso: !!conReembolso });
   }
   return NextResponse.json({ reembolso: !!conReembolso, devuelto, devolucionPendiente });
 }
