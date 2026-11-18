@@ -74,9 +74,12 @@ const trazos: Record<IlustracionId, React.ReactNode> = {
 export default function IlustracionEspecialidad({
   id,
   className = "",
+  compacta = false,
 }: {
   id: IlustracionId;
   className?: string;
+  /** Versión pequeña (iconos de lista): sin formas decorativas y trazo más grueso. */
+  compacta?: boolean;
 }) {
   return (
     <div
@@ -84,14 +87,18 @@ export default function IlustracionEspecialidad({
       aria-hidden="true"
     >
       {/* Formas decorativas de fondo */}
-      <div className="absolute -right-6 -top-8 h-28 w-28 rounded-full bg-white/50" />
-      <div className="absolute -bottom-10 -left-4 h-24 w-24 rounded-full bg-brand-200/40" />
+      {!compacta && (
+        <>
+          <div className="absolute -right-6 -top-8 h-28 w-28 rounded-full bg-white/50" />
+          <div className="absolute -bottom-10 -left-4 h-24 w-24 rounded-full bg-brand-200/40" />
+        </>
+      )}
       <svg
         viewBox="0 0 80 72"
-        className="relative mx-auto h-full w-auto max-w-[45%] text-brand-600"
+        className={`relative mx-auto h-full w-auto text-brand-600 ${compacta ? "max-w-[80%] p-1.5" : "max-w-[45%]"}`}
         fill="none"
         stroke="currentColor"
-        strokeWidth={2.5}
+        strokeWidth={compacta ? 3.5 : 2.5}
         strokeLinecap="round"
         strokeLinejoin="round"
       >

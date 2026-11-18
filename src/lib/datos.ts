@@ -179,3 +179,47 @@ export const navegacion = [
 export function formatoEuros(valor: number) {
   return `${valor} €`;
 }
+
+/* ------------------------------------------------------------------ */
+/* Reserva: profesionales, horarios y festivos (ficticios)             */
+/* ------------------------------------------------------------------ */
+
+export type DiaSemana = "lun" | "mar" | "mie" | "jue" | "vie" | "sab" | "dom";
+/** m = mañana, t = tarde, mt = mañana y tarde */
+export type Turno = "m" | "t" | "mt";
+
+export type ProfesionalDemo = {
+  id: string;
+  nombre: string;
+  rol: string;
+  especialidadId: IlustracionId;
+  horario: Partial<Record<DiaSemana, Turno>>;
+};
+
+export const profesionales: ProfesionalDemo[] = [
+  { id: "carmen-otero", nombre: "Dra. Carmen Otero", rol: "Médica de familia", especialidadId: "medicina-general", horario: { lun: "mt", mar: "mt", mie: "mt", jue: "mt", vie: "m" } },
+  { id: "xose-lago", nombre: "Dr. Xosé Lago", rol: "Médico de familia", especialidadId: "medicina-general", horario: { lun: "t", mar: "m", mie: "t", jue: "m", vie: "mt", sab: "m" } },
+  { id: "laura-mendez", nombre: "Laura Méndez", rol: "Fisioterapeuta", especialidadId: "fisioterapia", horario: { lun: "mt", mar: "mt", mie: "m", jue: "mt", vie: "mt", sab: "m" } },
+  { id: "iago-pereira", nombre: "Iago Pereira", rol: "Fisioterapeuta deportivo", especialidadId: "fisioterapia", horario: { lun: "t", mar: "t", mie: "mt", jue: "t", vie: "m" } },
+  { id: "andres-covelo", nombre: "Dr. Andrés Covelo", rol: "Traumatólogo", especialidadId: "traumatologia", horario: { mar: "t", jue: "mt" } },
+  { id: "noa-rial", nombre: "Noa Rial", rol: "Psicóloga sanitaria", especialidadId: "psicologia", horario: { lun: "mt", mie: "mt", vie: "m" } },
+  { id: "sara-iglesias", nombre: "Sara Iglesias", rol: "Podóloga", especialidadId: "podologia", horario: { mar: "m", jue: "mt", sab: "m" } },
+  { id: "elena-bouzas", nombre: "Dra. Elena Bouzas", rol: "Cardióloga", especialidadId: "cardiologia", horario: { lun: "m", mie: "m" } },
+  { id: "marta-souto", nombre: "Marta Souto", rol: "Dietista-nutricionista", especialidadId: "nutricion", horario: { mar: "mt", jue: "t", vie: "m" } },
+];
+
+/** Franjas de cada turno (horario de la clínica). */
+export const turnos = {
+  m: { inicio: "09:00", fin: "14:00" },
+  t: { inicio: "16:00", fin: "20:30" },
+} as const;
+
+export const festivos: { fecha: string; descripcion: string }[] = [
+  { fecha: "2026-12-08", descripcion: "Inmaculada Concepción" },
+  { fecha: "2026-12-25", descripcion: "Navidad" },
+  { fecha: "2027-01-01", descripcion: "Año Nuevo" },
+  { fecha: "2027-01-06", descripcion: "Reyes" },
+];
+
+/** Hasta cuántos días vista se puede reservar. */
+export const diasReservables = 60;
