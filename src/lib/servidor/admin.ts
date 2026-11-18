@@ -10,6 +10,7 @@ export function supabaseAdmin() {
   if (!clave) throw new Error("Falta SUPABASE_SERVICE_ROLE_KEY");
   return createClient<Database>(process.env.NEXT_PUBLIC_SUPABASE_URL!, clave, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: (url, opciones) => fetch(url, { ...opciones, cache: "no-store" }) },
   });
 }
 

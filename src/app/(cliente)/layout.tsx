@@ -6,6 +6,7 @@ import { supabaseServidor } from "@/lib/supabase/servidor";
 
 // Siempre datos frescos (precios, profesionales y festivos los cambia la clínica)
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
 export default async function ClienteLayout({ children }: { children: React.ReactNode }) {
   let catalogo;
