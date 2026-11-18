@@ -1,4 +1,5 @@
 import Link from "next/link";
+import BotonAbrirChat from "@/components/chat/BotonAbrirChat";
 import IlustracionEspecialidad from "@/components/IlustracionEspecialidad";
 import { contacto, especialidades, formatoEuros } from "@/lib/datos";
 
@@ -68,14 +69,9 @@ export default function Especialidades() {
               </p>
             </div>
             <div className="mt-6 flex flex-wrap gap-3">
-              <a
-                href={contacto.whatsappHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-brand-600 transition hover:bg-brand-50"
-              >
+              <BotonAbrirChat className="rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-brand-600 transition hover:bg-brand-50">
                 Hablar con {contacto.recepcionista}
-              </a>
+              </BotonAbrirChat>
               <a
                 href={`tel:${contacto.telefonoHref}`}
                 className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white ring-1 ring-white/40 transition hover:bg-white/10"

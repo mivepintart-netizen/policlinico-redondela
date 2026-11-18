@@ -1,4 +1,5 @@
 import Link from "next/link";
+import BotonAbrirChat from "@/components/chat/BotonAbrirChat";
 import {
   contacto,
   depositoMinimo,
@@ -126,17 +127,14 @@ export default function Hero() {
             >
               Reservar cita <span aria-hidden="true">→</span>
             </Link>
-            <a
-              href={contacto.whatsappHref}
-              target="_blank"
-              rel="noopener noreferrer"
+            <BotonAbrirChat
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-linea bg-white px-6 py-3.5 text-base font-medium text-tinta transition hover:border-brand-200 hover:bg-brand-50"
             >
               <svg viewBox="0 0 24 24" className="h-5 w-5 text-brand-500" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M21 12a8.5 8.5 0 0 1-12.6 7.4L3 21l1.6-5.4A8.5 8.5 0 1 1 21 12Z" />
               </svg>
               Hablar con {contacto.recepcionista}
-            </a>
+            </BotonAbrirChat>
           </div>
 
           <ul className="mt-8 flex flex-wrap gap-2">
