@@ -14,3 +14,15 @@ export function supabaseAdmin() {
 }
 
 export const hayClaveSecretaSupabase = () => !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+/** Comprueba que la clave secreta funciona de verdad (no solo que existe). */
+export async function claveSecretaFunciona() {
+  if (!hayClaveSecretaSupabase()) return false;
+  try {
+    const { error } = await supabaseAdmin().rpc("datos_reembolso", { p_reserva_id: "RDN-00000" });
+    if (error) console.error("clave secreta de Supabase", error.message);
+    return !error;
+  } catch {
+    return false;
+  }
+}

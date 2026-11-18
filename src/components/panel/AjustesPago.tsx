@@ -3,7 +3,14 @@
 import { useEffect, useState } from "react";
 import { supabaseNavegador } from "@/lib/supabase/cliente";
 
-type Estado = { stripe: "prueba" | "real" | null; webhook: boolean; claveSecretaSupabase: boolean };
+type Estado = {
+  stripe: "prueba" | "real" | null;
+  stripeConfigurado: boolean;
+  webhook: boolean;
+  webhookConfigurado: boolean;
+  claveSecretaSupabase: boolean;
+  claveSecretaConfigurada: boolean;
+};
 
 /** Interruptor del cobro online del anticipo (solo admin). */
 export default function AjustesPago({ onAviso }: { onAviso: (t: string) => void }) {
@@ -34,12 +41,22 @@ export default function AjustesPago({ onAviso }: { onAviso: (t: string) => void 
     onAviso(valor ? "Cobro online activado" : "Cobro online desactivado (pago simulado)");
   };
 
-  const fila = (ok: boolean, texto: string) => (
-    <li className="flex items-center gap-2">
-      <span className={`grid h-5 w-5 place-items-center rounded-full text-xs text-white ${ok ? "bg-brand-500" : "bg-slate-300"}`} aria-hidden="true">
-        {ok ? "✓" : "–"}
+  const fila = (ok: boolean, puesta: boolean, texto: string, ayuda: string) => (
+    <li className="flex items-start gap-2">
+      <span
+        className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-xs text-white ${ok ? "bg-brand-500" : puesta ? "bg-red-500" : "bg-slate-300"}`}
+        aria-hidden="true"
+      >
+        {ok ? "✓" : puesta ? "✕" : "–"}
       </span>
-      <span className={ok ? "" : "text-tinta-tenue"}>{texto}</span>
+      <span>
+        <span className={ok ? "" : "font-medium"}>{texto}</span>
+        {!ok && (
+          <span className="block text-xs text-tinta-suave">
+            {puesta ? `Está puesta pero NO funciona. ${ayuda}` : "Falta en Vercel."}
+          </span>
+        )}
+      </span>
     </li>
   );
 
@@ -76,11 +93,16 @@ export default function AjustesPago({ onAviso }: { onAviso: (t: string) => void 
           </button>
         </div>
       </div>
-      {estado && !listoParaOnline && (
-        <ul className="mt-4 space-y-1.5 border-t border-linea pt-4 text-sm">
-          {fila(!!estado.stripe, "Clave de Stripe (STRIPE_SECRET_KEY)")}
-          {fila(estado.webhook, "Aviso de pagos de Stripe (STRIPE_WEBHOOK_SECRET)")}
-          {fila(estado.claveSecretaSupabase, "Clave secreta de Supabase (SUPABASE_SERVICE_ROLE_KEY)")}
+      {estado && (
+        <ul className="mt-4 space-y-2 border-t border-linea pt-4 text-sm">
+          {fila(!!estado.stripe, estado.stripeConfigurado, "Clave de Stripe (STRIPE_SECRET_KEY)", "Debe empezar por sk_test_ (pruebas) o sk_live_ (real).")}
+          {fila(estado.webhook, estado.webhookConfigurado, "Aviso de pagos de Stripe (STRIPE_WEBHOOK_SECRET)", "Debe empezar por whsec_.")}
+          {fila(
+            estado.claveSecretaSupabase,
+            estado.claveSecretaConfigurada,
+            "Clave secreta de Supabase (SUPABASE_SERVICE_ROLE_KEY)",
+            "Debe ser la clave SECRETA (sb_secret_… o service_role), no la publishable."
+          )}
         </ul>
       )}
     </section>

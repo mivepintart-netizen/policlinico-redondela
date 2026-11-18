@@ -54,7 +54,13 @@ export async function iniciarPago(token: string, origen: string) {
     { idempotencyKey: `checkout-${r.id}-${Math.floor(Date.now() / 60000)}` }
   );
 
-  const { data: vigente } = await supabaseAdmin().rpc("registrar_sesion_pago", { p_reserva_id: r.id, p_sesion: sesion.id });
+  const { data: vigente, error: errorAdmin } = await supabaseAdmin().rpc("registrar_sesion_pago", { p_reserva_id: r.id, p_sesion: sesion.id });
+  if (errorAdmin) {
+    // Casi siempre: SUPABASE_SERVICE_ROLE_KEY incorrecta en Vercel
+    console.error("registrar_sesion_pago", errorAdmin);
+    await stripe.checkout.sessions.expire(sesion.id).catch(() => undefined);
+    throw new ErrorPago("El pago online no está bien configurado en el servidor. Avisa a la clínica.", 500);
+  }
   if (!vigente) {
     await stripe.checkout.sessions.expire(sesion.id).catch(() => undefined);
     throw new ErrorPago("El tiempo para pagar esta reserva ha caducado. Vuelve a reservar.", 409);
