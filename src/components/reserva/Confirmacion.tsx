@@ -84,9 +84,9 @@ export default function Confirmacion({
         <Link href={token ? `/mi-zona/cita/${token}` : "/mi-zona"} className="rounded-xl bg-brand-500 px-6 py-3 font-semibold text-white transition hover:bg-brand-600">
           Gestionar mi cita
         </Link>
-        <Link href="/" className="rounded-xl border border-linea bg-white px-6 py-3 font-medium transition hover:border-brand-200">
-          Volver al inicio
-        </Link>
+        <a href="/reservar" className="rounded-xl border border-linea bg-white px-6 py-3 font-medium transition hover:border-brand-200">
+          Reservar otra cita
+        </a>
       </div>
     </div>
   );

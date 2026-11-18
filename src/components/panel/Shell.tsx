@@ -75,9 +75,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             <span className="block text-xs capitalize text-brand-200">{sesion.rol}</span>
           </span>
         </div>
-        <Link href="/" className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-brand-100 transition hover:bg-white/5 hover:text-white">
+        <Link href="/reservar" target="_blank" className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-brand-100 transition hover:bg-white/5 hover:text-white">
           <Icono><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></Icono>
-          Ver web pública
+          Ver página de reserva
         </Link>
         <button
           type="button"

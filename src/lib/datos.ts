@@ -88,69 +88,6 @@ export const especialidades: EspecialidadDemo[] = [
   },
 ];
 
-export const depositoMinimo = Math.min(...especialidades.map((e) => e.deposito));
-
-/** Ticket de ejemplo que se muestra en el hero. */
-export const ticketHero = {
-  especialidadId: "fisioterapia" as const,
-  profesional: "Laura Méndez",
-  rol: "Fisioterapeuta",
-  huecos: [
-    { dia: "Hoy", hora: "17:30" },
-    { dia: "Hoy", hora: "19:15" },
-    { dia: "Mañana", hora: "10:00" },
-    { dia: "Mañana", hora: "12:45" },
-  ],
-};
-
-export const pasos = [
-  {
-    titulo: "Elige especialidad",
-    texto: "Escoge el servicio que necesitas y, si quieres, el profesional.",
-  },
-  {
-    titulo: "Escoge día y hora",
-    texto: "Ves los huecos libres en tiempo real. Sin llamadas ni esperas.",
-  },
-  {
-    titulo: "Paga el anticipo",
-    texto: "Confirmas tu cita con una pequeña parte del precio. El resto, en la clínica.",
-  },
-  {
-    titulo: "Recibe la confirmación",
-    texto: "Te llega un email con todos los detalles y un enlace para gestionar tu cita.",
-  },
-];
-
-export const ejemploAnticipo = {
-  total: 50,
-  ahora: 15,
-  enCentro: 35,
-};
-
-export const faqAnticipo = [
-  {
-    pregunta: "¿Por qué pedís un anticipo?",
-    respuesta:
-      "Para reducir las citas a las que nadie acude. Así los huecos libres llegan a quien de verdad los necesita y podemos mantener precios ajustados.",
-  },
-  {
-    pregunta: "¿Y si no puedo ir?",
-    respuesta:
-      "Si cancelas hasta 24 horas antes, te devolvemos el anticipo completo. Puedes cancelar o cambiar la cita desde el enlace del email de confirmación.",
-  },
-  {
-    pregunta: "¿Qué pasa si cancelo con menos de 24 horas?",
-    respuesta:
-      "En ese caso el anticipo no se devuelve, salvo causa justificada (enfermedad, urgencia familiar…). Llámanos y lo vemos.",
-  },
-  {
-    pregunta: "¿Cómo pago el resto?",
-    respuesta:
-      "En la clínica, el día de la cita, con tarjeta, Bizum o efectivo. El anticipo ya aparece descontado.",
-  },
-];
-
 export const contacto = {
   direccion: "Rúa do Viaduto, 14",
   codigoPostal: "36800",
@@ -168,13 +105,6 @@ export const contacto = {
     { dias: "Domingos y festivos", horas: "Cerrado" },
   ],
 };
-
-export const navegacion = [
-  { href: "/#especialidades", etiqueta: "Especialidades" },
-  { href: "/#como-funciona", etiqueta: "Cómo funciona" },
-  { href: "/#pago-anticipado", etiqueta: "Pago anticipado" },
-  { href: "/#contacto", etiqueta: "Contacto" },
-];
 
 export function formatoEuros(valor: number) {
   return `${valor} €`;

@@ -5,6 +5,7 @@ import { aISO, desdeISO, sumarDias } from "@/lib/agenda";
 import { formatoEuros } from "@/lib/datos";
 import { ESTADOS, aCSV, type EstadoPanel, type ReservaPanel } from "@/lib/panel";
 import DetalleReserva from "./DetalleReserva";
+import EnviarEnlace from "./EnviarEnlace";
 import NuevaReserva from "./NuevaReserva";
 import { usePanel } from "./PanelProvider";
 import { BadgeEstado, Cabecera, Toast, btn, claseCampoBase } from "./ui";
@@ -28,6 +29,7 @@ export default function Reservas() {
   const [pagina, setPagina] = useState(0);
   const [abierta, setAbierta] = useState<ReservaPanel | null>(null);
   const [nueva, setNueva] = useState(false);
+  const [enlace, setEnlace] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   const cerrarAviso = useCallback(() => setAviso(null), []);
 
@@ -86,7 +88,8 @@ export default function Reservas() {
     <>
       <Cabecera titulo="Reservas" texto={`${filtradas.length} reservas${filtradas.length !== todas.length ? ` de ${todas.length}` : ""}`}>
         <button type="button" onClick={exportar} disabled={!filtradas.length} className={btn.secundario}>Exportar CSV</button>
-        <button type="button" onClick={() => setNueva(true)} className={btn.primario}>+ Nueva cita</button>
+        <button type="button" onClick={() => setNueva(true)} className={btn.secundario}>+ Nueva cita</button>
+        <button type="button" onClick={() => setEnlace(true)} className={btn.primario}>Enviar enlace de reserva</button>
       </Cabecera>
 
       {/* Rango */}
@@ -238,6 +241,7 @@ export default function Reservas() {
           setAviso(`Cita ${r.id} creada`);
         }}
       />
+      <EnviarEnlace abierto={enlace} onCerrar={() => setEnlace(false)} onAviso={setAviso} />
       <Toast texto={aviso} onCerrar={cerrarAviso} />
     </>
   );

@@ -1,17 +1,6 @@
-import Hero from "@/components/home/Hero";
-import Especialidades from "@/components/home/Especialidades";
-import ComoFunciona from "@/components/home/ComoFunciona";
-import PagoAnticipado from "@/components/home/PagoAnticipado";
-import Contacto from "@/components/home/Contacto";
+import { redirect } from "next/navigation";
 
-export default function Home() {
-  return (
-    <>
-      <Hero />
-      <Especialidades />
-      <ComoFunciona />
-      <PagoAnticipado />
-      <Contacto />
-    </>
-  );
+/** La web va directa a la reserva: los pacientes llegan con el enlace que les envía la clínica. */
+export default function Inicio() {
+  redirect("/reservar");
 }

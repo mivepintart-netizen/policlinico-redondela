@@ -11,9 +11,9 @@ export function IconoCruz({ className = "h-5 w-5" }: { className?: string }) {
 export default function Logo({ claro = false }: { claro?: boolean }) {
   return (
     <Link
-      href="/"
+      href="/reservar"
       className="group flex items-center gap-2.5"
-      aria-label="Policlínico Redondela, inicio"
+      aria-label="Policlínico Redondela, reservar cita"
     >
       <span
         className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${

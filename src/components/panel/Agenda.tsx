@@ -5,6 +5,7 @@ import { aISO, desdeISO, fechaLarga, sumarDias } from "@/lib/agenda";
 import { formatoEuros, turnos, type DiaSemana } from "@/lib/datos";
 import { ESTADOS, esActiva, type ReservaPanel } from "@/lib/panel";
 import DetalleReserva from "./DetalleReserva";
+import EnviarEnlace from "./EnviarEnlace";
 import NuevaReserva from "./NuevaReserva";
 import { usePanel } from "./PanelProvider";
 import { BadgeEstado, Cabecera, Kpi, Toast, btn, claseCampoBase } from "./ui";
@@ -31,6 +32,7 @@ export default function Agenda() {
   const [verCanceladas, setVerCanceladas] = useState(false);
   const [abierta, setAbierta] = useState<ReservaPanel | null>(null);
   const [nueva, setNueva] = useState(false);
+  const [enlace, setEnlace] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   const cerrarAviso = useCallback(() => setAviso(null), []);
 
@@ -84,7 +86,8 @@ export default function Agenda() {
         </div>
         <label className="sr-only" htmlFor="agenda-fecha">Ir a fecha</label>
         <input id="agenda-fecha" type="date" value={fecha} onChange={(e) => e.target.value && setFecha(e.target.value)} className={`${claseCampoBase} w-auto`} />
-        <button type="button" onClick={() => setNueva(true)} className={btn.primario}>+ Nueva cita</button>
+        <button type="button" onClick={() => setNueva(true)} className={btn.secundario}>+ Nueva cita</button>
+        <button type="button" onClick={() => setEnlace(true)} className={btn.primario}>Enviar enlace de reserva</button>
       </Cabecera>
 
       {/* Cifras */}
@@ -233,6 +236,7 @@ export default function Agenda() {
           setAviso(`Cita ${r.id} creada para el ${fechaLarga(r.fecha).toLowerCase()} a las ${r.hora}`);
         }}
       />
+      <EnviarEnlace abierto={enlace} onCerrar={() => setEnlace(false)} onAviso={setAviso} />
       <Toast texto={aviso} onCerrar={cerrarAviso} />
     </>
   );
