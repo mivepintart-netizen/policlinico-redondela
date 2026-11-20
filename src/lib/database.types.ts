@@ -10,7 +10,7 @@ export type DiaSemana = "lun" | "mar" | "mie" | "jue" | "vie" | "sab" | "dom";
 export type Turno = "m" | "t" | "mt";
 export type Horario = Partial<Record<DiaSemana, Turno>>;
 
-export type EstadoReserva = "pendiente_pago" | "confirmada" | "sin_deposito" | "cancelada" | "completada";
+export type EstadoReserva = "pendiente_pago" | "confirmada" | "sin_deposito" | "cancelada" | "completada" | "no_presentado";
 export type MetodoPago = "tarjeta" | "bizum" | "recepcion";
 export type RolPanel = "admin" | "secretaria";
 
@@ -71,6 +71,15 @@ export type FilaReserva = {
   pago_sesion: string | null;
   email_confirmacion_at: string | null;
   recordatorio_at: string | null;
+  garantia_cliente: string | null;
+  garantia_metodo: string | null;
+  garantia_tarjeta: string | null;
+  cancelada_tarde: boolean;
+  cobro_ref: string | null;
+  cobro_importe: number | null;
+  cobro_at: string | null;
+  cobro_devuelto: boolean;
+  cobro_error: string | null;
 };
 
 export type FilaAjustes = { id: boolean; pago_online: boolean };
@@ -80,7 +89,7 @@ export type CitaPaciente = Pick<
   FilaReserva,
   | "id" | "especialidad_id" | "profesional_id" | "fecha" | "hora" | "precio" | "deposito" | "estado"
   | "metodo_pago" | "reembolso" | "paciente_nombre" | "paciente_apellidos" | "paciente_email" | "token_acceso"
-  | "expira_en"
+  | "expira_en" | "garantia_tarjeta" | "cancelada_tarde" | "cobro_importe"
 >;
 
 export type Database = {
@@ -124,11 +133,23 @@ export type Database = {
       cambiar_reserva_por_token: { Args: { p_token: string; p_fecha: string; p_hora: string }; Returns: undefined };
       liberar_pagos_caducados: { Args: Record<PropertyKey, never>; Returns: undefined };
       registrar_sesion_pago: { Args: { p_reserva_id: string; p_sesion: string }; Returns: boolean };
-      confirmar_pago: { Args: { p_reserva_id: string; p_pago_ref: string; p_metodo: string | null }; Returns: "confirmada" | "caducada" };
-      datos_reembolso: {
-        Args: { p_reserva_id: string };
-        Returns: { pago_ref: string | null; deposito: number; reembolso: boolean; estado: EstadoReserva }[];
+      confirmar_garantia: {
+        Args: { p_reserva_id: string; p_cliente: string; p_metodo: string; p_tarjeta: string };
+        Returns: "confirmada" | "caducada";
       };
+      datos_cobro: {
+        Args: { p_reserva_id: string };
+        Returns: (Pick<
+          FilaReserva,
+          | "estado" | "precio" | "fecha" | "hora" | "cancelada_tarde" | "garantia_cliente" | "garantia_metodo"
+          | "cobro_ref" | "cobro_importe" | "cobro_devuelto" | "paciente_nombre" | "paciente_apellidos" | "paciente_email"
+        >)[];
+      };
+      registrar_cobro: {
+        Args: { p_reserva_id: string; p_ref: string | null; p_importe: number | null; p_error: string | null };
+        Returns: undefined;
+      };
+      registrar_devolucion_cobro: { Args: { p_reserva_id: string }; Returns: undefined };
       es_usuario_panel: { Args: Record<PropertyKey, never>; Returns: boolean };
       es_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
     };

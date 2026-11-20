@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { contacto, formatoEuros } from "@/lib/datos";
+import { PORCENTAJE_AUSENCIA, contacto, formatoEuros, importeAusencia } from "@/lib/datos";
 import { usePanel } from "./PanelProvider";
 import { Cajon, btn, claseCampo } from "./ui";
 
 /**
- * La secretaria envía al paciente el enlace para reservar y pagar el anticipo.
+ * La secretaria envía al paciente el enlace para reservar dejando su tarjeta en garantía.
  * El enlace solo lleva la especialidad (nunca datos personales, que quedarían
  * guardados en historiales y registros).
  */
@@ -40,10 +40,10 @@ export default function EnviarEnlace({
   const mensajeAuto = useMemo(() => {
     const saludo = nombre.trim() ? `Hola ${nombre.trim().split(" ")[0]},` : "Hola,";
     const que = esp ? `tu cita de ${esp.nombre.toLowerCase()}` : "tu cita";
-    const anticipo = esp
-      ? `Al reservar se paga un anticipo de ${formatoEuros(esp.deposito)} y el resto (${formatoEuros(esp.precio - esp.deposito)}) en la clínica.`
-      : "Al reservar se paga una pequeña parte como anticipo y el resto en la clínica.";
-    return `${saludo} soy ${firma} del Policlínico Redondela. Para reservar ${que}, entra aquí y elige el día y la hora que mejor te vengan:\n${enlace}\n\n${anticipo} Si cancelas con más de 24 h de antelación, te lo devolvemos.`;
+    const condiciones = esp
+      ? `No se cobra nada al reservar: solo se deja la tarjeta como garantía y la consulta (${formatoEuros(esp.precio)}) se paga en la clínica. Si no puedes venir, cancela con más de 24 h y no se cobra nada; si no vienes, se cobra el ${PORCENTAJE_AUSENCIA} % (${formatoEuros(importeAusencia(esp.precio))}).`
+      : `No se cobra nada al reservar: solo se deja la tarjeta como garantía y la consulta se paga en la clínica. Si no puedes venir, cancela con más de 24 h y no se cobra nada; si no vienes, se cobra el ${PORCENTAJE_AUSENCIA} % de la cita.`;
+    return `${saludo} soy ${firma} del Policlínico Redondela. Para reservar ${que}, entra aquí y elige el día y la hora que mejor te vengan:\n${enlace}\n\n${condiciones}`;
   }, [nombre, esp, enlace, firma]);
 
   // El mensaje se regenera mientras la secretaria no lo haya editado a mano
@@ -79,7 +79,7 @@ export default function EnviarEnlace({
     <Cajon
       abierto={abierto}
       titulo="Enviar enlace de reserva"
-      subtitulo="El paciente elige día y hora y paga el anticipo desde su móvil"
+      subtitulo="El paciente elige día y hora y deja su tarjeta en garantía desde el móvil"
       onCerrar={onCerrar}
       pie={
         <div className="grid gap-2 sm:grid-cols-2">
@@ -140,7 +140,7 @@ export default function EnviarEnlace({
               <option value="">Que la elija el paciente</option>
               {especialidades.filter((e) => e.activa).map((e) => (
                 <option key={e.id} value={e.id}>
-                  {e.nombre} · anticipo {formatoEuros(e.deposito)}
+                  {e.nombre} · {formatoEuros(e.precio)}
                 </option>
               ))}
             </select>

@@ -1,14 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { formatoEuros } from "@/lib/datos";
+import { PORCENTAJE_AUSENCIA, formatoEuros, importeAusencia } from "@/lib/datos";
 import type { Especialidad } from "@/lib/catalogo";
 import { usePanel } from "./PanelProvider";
 import { Cabecera, Toast, btn, claseCampoBase } from "./ui";
 import AjustesPago from "./AjustesPago";
 import AjustesRecordatorios from "./AjustesRecordatorios";
 
-type Campo = "duracionMin" | "precio" | "deposito";
+type Campo = "duracionMin" | "precio";
 
 export default function Especialidades() {
   const { especialidades, guardarEspecialidades } = usePanel();
@@ -21,8 +21,6 @@ export default function Especialidades() {
   const errores = borrador.map((e) => {
     if (!Number.isInteger(e.duracionMin) || e.duracionMin < 5) return "La duración mínima es 5 min";
     if (!Number.isFinite(e.precio) || e.precio < 0) return "Precio no válido";
-    if (!Number.isFinite(e.deposito) || e.deposito < 0) return "Anticipo no válido";
-    if (e.deposito > e.precio) return "El anticipo no puede superar el precio";
     return null;
   });
   const hayCambios = JSON.stringify(borrador) !== JSON.stringify(especialidades);
@@ -49,7 +47,7 @@ export default function Especialidades() {
 
   return (
     <>
-      <Cabecera titulo="Especialidades y precios" texto="Duración de cada cita, precio total y anticipo que se paga al reservar.">
+      <Cabecera titulo="Especialidades y precios" texto={`Duración y precio de cada cita. Si el paciente no se presenta, se le puede cobrar el ${PORCENTAJE_AUSENCIA} % del precio.`}>
         <button type="button" disabled={!hayCambios} onClick={() => setBorrador(especialidades)} className={btn.fantasma}>Descartar</button>
         <button
           type="button"
@@ -68,17 +66,16 @@ export default function Especialidades() {
       <AjustesRecordatorios onAviso={setAviso} />
 
       <div className="space-y-2">
-        <div className="hidden grid-cols-[1.5fr_1fr_1fr_1fr_1fr_auto] gap-3 px-4 text-xs font-medium text-tinta-tenue md:grid">
+        <div className="hidden grid-cols-[1.5fr_1fr_1fr_1fr_auto] gap-3 px-4 text-xs font-medium text-tinta-tenue md:grid">
           <span>Especialidad</span>
           <span className="text-right">Duración</span>
           <span className="text-right">Precio</span>
-          <span className="text-right">Anticipo</span>
-          <span className="text-right">En clínica</span>
+          <span className="text-right">Si no viene ({PORCENTAJE_AUSENCIA} %)</span>
           <span className="w-16 text-right">Activa</span>
         </div>
         {borrador.map((e, i) => (
           <div key={e.id} className={`rounded-2xl bg-white p-4 ring-1 ${errores[i] ? "ring-red-200" : "ring-linea"} ${e.activa ? "" : "opacity-60"}`}>
-            <div className="grid grid-cols-2 items-center gap-3 md:grid-cols-[1.5fr_1fr_1fr_1fr_1fr_auto]">
+            <div className="grid grid-cols-2 items-center gap-3 md:grid-cols-[1.5fr_1fr_1fr_1fr_auto]">
               <p className="col-span-2 font-semibold md:col-span-1">{e.nombre}</p>
               <label className="text-xs text-tinta-tenue md:contents">
                 <span className="mb-1 block md:hidden">Duración</span>
@@ -88,13 +85,9 @@ export default function Especialidades() {
                 <span className="mb-1 block md:hidden">Precio</span>
                 {numero(i, "precio", "€")}
               </label>
-              <label className="text-xs text-tinta-tenue md:contents">
-                <span className="mb-1 block md:hidden">Anticipo</span>
-                {numero(i, "deposito", "€")}
-              </label>
-              <p className="text-right text-sm tabular-nums text-tinta-suave">
-                <span className="mr-1 text-xs text-tinta-tenue md:hidden">En clínica:</span>
-                {Number.isFinite(e.precio - e.deposito) ? formatoEuros(e.precio - e.deposito) : "—"}
+              <p className="text-right text-sm tabular-nums text-ambar-600">
+                <span className="mr-1 text-xs text-tinta-tenue md:hidden">Si no viene:</span>
+                {Number.isFinite(e.precio) ? formatoEuros(importeAusencia(e.precio)) : "—"}
               </p>
               <label className="flex items-center justify-end gap-2 md:w-16">
                 <span className="text-xs text-tinta-tenue md:sr-only">Activa</span>

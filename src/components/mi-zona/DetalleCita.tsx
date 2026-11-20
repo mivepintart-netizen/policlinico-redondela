@@ -3,20 +3,20 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fechaLarga, type Hueco } from "@/lib/agenda";
-import { contacto, formatoEuros } from "@/lib/datos";
+import { PORCENTAJE_AUSENCIA, contacto, formatoEuros, importeAusencia } from "@/lib/datos";
 import { momento } from "@/lib/agenda";
 import type { CitaPaciente } from "@/lib/database.types";
 import { mensajeError, supabaseNavegador } from "@/lib/supabase/cliente";
 import { useCatalogo } from "@/components/CatalogoProvider";
-type EstadoVisible = "pendiente_pago" | "confirmada" | "cancelada" | "completada";
+type EstadoVisible = "pendiente_pago" | "confirmada" | "cancelada" | "completada" | "no_presentado";
 
 /** Estado que ve el paciente: una cita activa cuya hora ya pasó se muestra como realizada. */
 function estadoEfectivo(r: CitaPaciente, ahora: Date): EstadoVisible {
-  if (r.estado === "cancelada" || r.estado === "completada" || r.estado === "pendiente_pago") return r.estado;
+  if (r.estado === "cancelada" || r.estado === "completada" || r.estado === "pendiente_pago" || r.estado === "no_presentado") return r.estado;
   return momento(r.fecha, r.hora) < ahora ? "completada" : "confirmada";
 }
 
-/** ¿Faltan más de 24 h? (se puede cambiar y cancelar con reembolso) */
+/** ¿Faltan más de 24 h? (se puede cambiar y cancelar sin coste) */
 const dentroDePlazo = (r: CitaPaciente, ahora: Date) => momento(r.fecha, r.hora).getTime() - ahora.getTime() > 24 * 3600 * 1000;
 import { PasoFecha } from "@/components/reserva/Pasos";
 import { AvisoCancelacion } from "@/components/reserva/Resumen";
@@ -25,10 +25,11 @@ import { descargarIcs } from "./calendarioIcs";
 type Aviso = { tipo: "ok" | "info"; texto: string } | null;
 
 const ETIQUETAS = {
-  pendiente_pago: { texto: "Pendiente de pago", clase: "bg-ambar-50 text-ambar-700 ring-ambar-100" },
+  pendiente_pago: { texto: "Falta la tarjeta", clase: "bg-ambar-50 text-ambar-700 ring-ambar-100" },
   confirmada: { texto: "Confirmada", clase: "bg-brand-50 text-brand-700 ring-brand-100" },
   cancelada: { texto: "Cancelada", clase: "bg-red-50 text-red-700 ring-red-100" },
   completada: { texto: "Realizada", clase: "bg-fondo text-tinta-suave ring-linea" },
+  no_presentado: { texto: "No acudiste", clase: "bg-red-50 text-red-700 ring-red-100" },
 } as const;
 
 function Icono({ children }: { children: React.ReactNode }) {
@@ -45,15 +46,16 @@ function Icono({ children }: { children: React.ReactNode }) {
 
 function DialogoCancelar({
   reserva,
-  conReembolso,
-  deposito,
+  tarde,
+  importe,
   onCerrar,
   onConfirmar,
   ocupado = false,
 }: {
   reserva: CitaPaciente;
-  conReembolso: boolean;
-  deposito: number;
+  /** Menos de 24 h y con tarjeta en garantía: se podrá cobrar */
+  tarde: boolean;
+  importe: number;
   onCerrar: () => void;
   onConfirmar: () => void;
   ocupado?: boolean;
@@ -80,18 +82,17 @@ function DialogoCancelar({
           {fechaLarga(reserva.fecha)} a las {reserva.hora}. El hueco quedará libre para otra persona.
         </p>
 
-        <div className={`mt-5 rounded-xl p-4 text-sm ${conReembolso ? "bg-brand-50 text-brand-800" : "bg-ambar-50 text-ambar-700"}`}>
-          {conReembolso ? (
+        <div className={`mt-5 rounded-xl p-4 text-sm ${tarde ? "bg-ambar-50 text-ambar-700" : "bg-brand-50 text-brand-800"}`}>
+          {tarde ? (
             <>
-              Te devolveremos el anticipo de <strong className="font-semibold">{formatoEuros(deposito)}</strong> en 3–5
-              días hábiles, por el mismo medio de pago.
+              Faltan menos de 24 horas para tu cita: según las condiciones de reserva,{" "}
+              <strong className="font-semibold">
+                la clínica podrá cobrarte el {PORCENTAJE_AUSENCIA} % ({formatoEuros(importe)})
+              </strong>
+              . Si es por una causa justificada, habla con {contacto.recepcionista}.
             </>
           ) : (
-            <>
-              Faltan menos de 24 horas para tu cita:{" "}
-              <strong className="font-semibold">el anticipo de {formatoEuros(deposito)} no se devuelve.</strong> Si es
-              por una causa justificada, habla con {contacto.recepcionista}.
-            </>
+            <>Sin coste: no se te cobrará nada.</>
           )}
         </div>
 
@@ -129,10 +130,11 @@ export default function DetalleCita({ token }: { token: string }) {
   useEffect(() => {
     setAhora(new Date());
     const pago = new URLSearchParams(window.location.search).get("pago");
-    if (pago === "ok") setAviso({ tipo: "ok", texto: "¡Pago recibido! Tu cita está confirmada. Guarda este enlace para gestionarla." });
+    if (pago === "ok")
+      setAviso({ tipo: "ok", texto: "¡Tarjeta guardada! Tu cita está confirmada y no se te ha cobrado nada. Guarda este enlace para gestionarla." });
     else if (pago === "caducado")
-      setAviso({ tipo: "info", texto: "El pago llegó cuando el hueco ya estaba ocupado. Te hemos devuelto el dinero; elige otra hora." });
-    else if (pago === "cancelado") setAviso({ tipo: "info", texto: "No se ha completado el pago. Tu cita aún no está confirmada." });
+      setAviso({ tipo: "info", texto: "Cuando terminaste, el hueco ya estaba ocupado. No se te ha cobrado nada; elige otra hora." });
+    else if (pago === "cancelado") setAviso({ tipo: "info", texto: "No has terminado de añadir la tarjeta. Tu cita aún no está confirmada." });
     if (pago) window.history.replaceState(null, "", window.location.pathname);
     supabaseNavegador()
       .rpc("obtener_reserva_por_token", { p_token: token })
@@ -179,10 +181,11 @@ export default function DetalleCita({ token }: { token: string }) {
     id: reserva.especialidad_id, nombre: "Consulta", duracionMin: 30,
   };
   const prof = profesionales.find((p) => p.id === reserva.profesional_id);
-  // Precio y anticipo guardados en la reserva (los de la especialidad pueden haber cambiado)
-  const anticipo =
-    reserva.metodo_pago && reserva.estado !== "sin_deposito" && reserva.estado !== "pendiente_pago" ? reserva.deposito : 0;
-  const pendiente = reserva.precio - anticipo;
+  // Precio guardado en la reserva (el de la especialidad puede haber cambiado)
+  const pendiente = reserva.precio;
+  const garantia = reserva.garantia_tarjeta;
+  const importe = importeAusencia(reserva.precio);
+  const cobrado = reserva.cobro_importe ? reserva.cobro_importe / 100 : 0;
   const estado = estadoEfectivo(reserva, ahora);
   const enPlazo = dentroDePlazo(reserva, ahora);
   const activa = estado === "confirmada";
@@ -202,7 +205,7 @@ export default function DetalleCita({ token }: { token: string }) {
       return;
     }
     setOcupado(false);
-    setErrorAccion(cuerpo?.error ?? "No se pudo abrir el pago. Inténtalo de nuevo.");
+    setErrorAccion(cuerpo?.error ?? "No se pudo abrir la página de la tarjeta. Inténtalo de nuevo.");
     await recargar();
   };
 
@@ -214,26 +217,19 @@ export default function DetalleCita({ token }: { token: string }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token }),
     }).catch(() => null);
-    const cuerpo = (await res?.json().catch(() => ({}))) as
-      | { reembolso?: boolean; devolucionPendiente?: boolean; error?: string }
-      | undefined;
+    const cuerpo = (await res?.json().catch(() => ({}))) as { tarde?: boolean; error?: string } | undefined;
     setOcupado(false);
     setCancelando(false);
     if (!res?.ok) {
       setErrorAccion(cuerpo?.error ?? "No se pudo cancelar la cita. Revisa tu conexión.");
       return;
     }
-    const devuelto = cuerpo?.reembolso;
     await recargar();
     setAviso({
       tipo: "info",
-      texto: devuelto
-        ? cuerpo?.devolucionPendiente
-          ? `Cita cancelada. La clínica te devolverá ${formatoEuros(anticipo)}; si en unos días no lo ves, llámanos.`
-          : `Cita cancelada. Te devolveremos ${formatoEuros(anticipo)} en 5–10 días hábiles.`
-        : anticipo > 0
-          ? "Cita cancelada. Al ser con menos de 24 horas, el anticipo no se devuelve."
-          : "Cita cancelada.",
+      texto: cuerpo?.tarde
+        ? `Cita cancelada. Al ser con menos de 24 horas, la clínica podrá cobrarte ${formatoEuros(importe)}. Si fue por una causa justificada, llámanos.`
+        : "Cita cancelada. No se te ha cobrado nada.",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -307,13 +303,13 @@ export default function DetalleCita({ token }: { token: string }) {
       {esperandoPago && (
         <div className="mt-6 flex flex-col gap-4 rounded-2xl bg-ambar-50 p-5 ring-1 ring-ambar-100 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="font-semibold text-ambar-700">Falta pagar el anticipo para confirmar la cita</p>
+            <p className="font-semibold text-ambar-700">Falta añadir tu tarjeta para confirmar la cita</p>
             <p className="mt-1 text-sm text-tinta-suave">
               Tu hueco está apartado
               {reserva.expira_en
                 ? ` hasta las ${new Date(reserva.expira_en).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}`
                 : ""}
-              . Si no se paga, se libera.
+              . No se te cobrará nada al añadirla.
             </p>
           </div>
           <button
@@ -322,7 +318,7 @@ export default function DetalleCita({ token }: { token: string }) {
             disabled={ocupado}
             className="shrink-0 rounded-xl bg-ambar-500 px-5 py-3 font-semibold text-white transition hover:bg-ambar-600 disabled:opacity-60"
           >
-            {ocupado ? "Abriendo pago…" : `Pagar ${formatoEuros(reserva.deposito)}`}
+            {ocupado ? "Abriendo…" : "Añadir tarjeta"}
           </button>
         </div>
       )}
@@ -333,7 +329,7 @@ export default function DetalleCita({ token }: { token: string }) {
           <h2 id="titulo-cambio" className="text-xl font-semibold tracking-tight">Elige el nuevo día y hora</h2>
           <p className="mt-1 text-sm text-tinta-suave">
             Ahora: {fechaLarga(reserva.fecha)} a las {reserva.hora}
-            {prof && <> con {prof.nombre}</>}. El anticipo pagado se mantiene.
+            {prof && <> con {prof.nombre}</>}.{garantia && " Tu tarjeta en garantía se mantiene."}
           </p>
           <div className="mt-6">
             <PasoFecha
@@ -412,16 +408,23 @@ export default function DetalleCita({ token }: { token: string }) {
             <div className="mx-6 border-t-2 border-dashed border-linea" aria-hidden="true" />
 
             <dl className="grid grid-cols-2 gap-3 p-6 text-sm">
-              <div className="rounded-xl bg-ambar-50 p-3">
-                <dt className="text-ambar-700">Anticipo pagado</dt>
-                <dd className="text-xl font-semibold tabular-nums text-ambar-600">{formatoEuros(anticipo)}</dd>
-                {estado === "cancelada" && (
-                  <dd className="mt-1 text-xs text-ambar-700">{reserva.reembolso ? "Reembolsado" : "No reembolsable"}</dd>
-                )}
-              </div>
+              {cobrado > 0 ? (
+                <div className="rounded-xl bg-ambar-50 p-3">
+                  <dt className="text-ambar-700">Cobrado por ausencia</dt>
+                  <dd className="text-xl font-semibold tabular-nums text-ambar-600">{formatoEuros(cobrado)}</dd>
+                </div>
+              ) : (
+                <div className="rounded-xl bg-brand-50 p-3">
+                  <dt className="text-brand-700">Pagado al reservar</dt>
+                  <dd className="text-xl font-semibold tabular-nums text-brand-600">0 €</dd>
+                  {garantia && <dd className="mt-1 text-xs text-brand-700">Garantía: {garantia}</dd>}
+                </div>
+              )}
               <div className="rounded-xl bg-fondo p-3">
-                <dt className="text-tinta-suave">{estado === "cancelada" ? "Ya no tienes que pagar" : "A pagar en la clínica"}</dt>
-                <dd className={`text-xl font-semibold tabular-nums ${estado === "cancelada" ? "text-tinta-tenue line-through" : ""}`}>
+                <dt className="text-tinta-suave">
+                  {estado === "cancelada" || estado === "no_presentado" ? "Ya no tienes que pagar" : "A pagar en la clínica"}
+                </dt>
+                <dd className={`text-xl font-semibold tabular-nums ${estado === "cancelada" || estado === "no_presentado" ? "text-tinta-tenue line-through" : ""}`}>
                   {formatoEuros(pendiente)}
                 </dd>
               </div>
@@ -435,7 +438,7 @@ export default function DetalleCita({ token }: { token: string }) {
                   </Icono>
                 </span>
                 <span>
-                  <AvisoCancelacion fecha={reserva.fecha} hora={reserva.hora} />
+                  <AvisoCancelacion fecha={reserva.fecha} hora={reserva.hora} garantia={!!garantia} />
                 </span>
               </p>
             )}
@@ -522,7 +525,7 @@ export default function DetalleCita({ token }: { token: string }) {
                       <span>
                         <span className="block font-semibold">Cancelar cita</span>
                         <span className="block text-sm text-red-700/70">
-                          {anticipo === 0 ? "Sin coste" : enPlazo ? `Te devolvemos ${formatoEuros(anticipo)}` : "Sin reembolso del anticipo"}
+                          {enPlazo || !garantia ? "Sin coste" : `Se podrá cobrar ${formatoEuros(importe)}`}
                         </span>
                       </span>
                     </button>
@@ -532,7 +535,7 @@ export default function DetalleCita({ token }: { token: string }) {
             ) : esperandoPago ? (
               <div className="rounded-2xl bg-white p-6 ring-1 ring-linea">
                 <p className="font-semibold">¿Ya no quieres esta cita?</p>
-                <p className="mt-1 text-sm text-tinta-suave">Puedes anular la reserva y liberar el hueco. No se te ha cobrado nada.</p>
+                <p className="mt-1 text-sm text-tinta-suave">Puedes anular la reserva y liberar el hueco. No se te cobra nada.</p>
                 <button type="button" onClick={() => setCancelando(true)} className="mt-4 w-full rounded-xl px-5 py-3 font-semibold text-red-700 ring-1 ring-red-200 transition hover:bg-red-50">
                   Anular reserva
                 </button>
@@ -540,20 +543,28 @@ export default function DetalleCita({ token }: { token: string }) {
             ) : (
               <div className="rounded-2xl bg-white p-6 ring-1 ring-linea">
                 <p className="font-semibold">
-                  {estado === "cancelada" ? "Esta cita está cancelada" : "Esta cita ya se realizó"}
+                  {estado === "cancelada"
+                    ? "Esta cita está cancelada"
+                    : estado === "no_presentado"
+                      ? "No acudiste a esta cita"
+                      : "Esta cita ya se realizó"}
                 </p>
                 <p className="mt-1 text-sm text-tinta-suave">
-                  {estado === "cancelada"
-                    ? reserva.reembolso
-                      ? `El anticipo de ${formatoEuros(anticipo)} se devuelve en 3–5 días hábiles.`
-                      : "Se canceló con menos de 24 horas, así que el anticipo no se devolvió."
-                    : "Esperamos que todo fuera bien. ¿Necesitas otra cita?"}
+                  {cobrado > 0
+                    ? `Se cobraron ${formatoEuros(cobrado)} (${PORCENTAJE_AUSENCIA} % de la cita) a tu tarjeta, según las condiciones de reserva. Si crees que es un error, llámanos.`
+                    : estado === "cancelada"
+                      ? reserva.cancelada_tarde
+                        ? `Se canceló con menos de 24 horas: la clínica puede cobrar el ${PORCENTAJE_AUSENCIA} % (${formatoEuros(importe)}).`
+                        : "No se te ha cobrado nada."
+                      : estado === "no_presentado"
+                        ? "Si no pudiste venir por una causa justificada, llámanos."
+                        : "Esperamos que todo fuera bien. ¿Necesitas otra cita?"}
                 </p>
                 <Link
                   href={`/reservar?especialidad=${esp.id}`}
                   className="mt-4 inline-flex w-full justify-center rounded-xl bg-brand-500 px-5 py-3 font-semibold text-white transition hover:bg-brand-600"
                 >
-                  Reservar {estado === "cancelada" ? "otra" : "de nuevo"}
+                  Reservar {estado === "completada" ? "de nuevo" : "otra"}
                 </Link>
               </div>
             )}
@@ -577,8 +588,8 @@ export default function DetalleCita({ token }: { token: string }) {
       {cancelando && (
         <DialogoCancelar
           reserva={reserva}
-          conReembolso={enPlazo && anticipo > 0}
-          deposito={anticipo}
+          tarde={!enPlazo && !!garantia && estado === "confirmada"}
+          importe={importe}
           onCerrar={cerrarCancelar}
           onConfirmar={() => void confirmarCancelacion()}
           ocupado={ocupado}

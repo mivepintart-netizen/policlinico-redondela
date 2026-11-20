@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { aISO, desdeISO, sumarDias } from "@/lib/agenda";
 import { formatoEuros } from "@/lib/datos";
-import { ESTADOS, aCSV, anticipoCobrado, type EstadoPanel, type ReservaPanel } from "@/lib/panel";
+import { ESTADOS, aCSV, cobroAusencia, sePuedeCobrar, type EstadoPanel, type ReservaPanel } from "@/lib/panel";
 import DetalleReserva from "./DetalleReserva";
 import EnviarEnlace from "./EnviarEnlace";
 import NuevaReserva from "./NuevaReserva";
@@ -168,14 +168,14 @@ export default function Reservas() {
               <th scope="col" className="px-4 py-3">Paciente</th>
               <th scope="col" className="px-4 py-3">Especialidad</th>
               <th scope="col" className="px-4 py-3">Estado</th>
-              <th scope="col" className="px-4 py-3 text-right">Anticipo</th>
+              <th scope="col" className="px-4 py-3 text-right">Garantía</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-linea">
             {visibles.map((r) => {
               const e = especialidades.find((x) => x.id === r.especialidadId);
               const p = profesionales.find((x) => x.id === r.profesionalId);
-              const pagado = anticipoCobrado(r) > 0;
+              const cobrado = cobroAusencia(r);
               return (
                 <tr key={r.id} onClick={() => setAbierta(r)} className="cursor-pointer transition hover:bg-brand-50/50">
                   <td className="px-4 py-3">
@@ -194,10 +194,16 @@ export default function Reservas() {
                   </td>
                   <td className="px-4 py-3"><BadgeEstado estado={r.estado} /></td>
                   <td className="px-4 py-3 text-right tabular-nums">
-                    {pagado ? <span className="font-medium text-ambar-600">{formatoEuros(anticipoCobrado(r))}</span> : <span className="text-tinta-tenue">—</span>}
-                    {r.estado === "cancelada" && pagado && (
-                      <span className="block text-xs text-tinta-tenue">{r.reembolso ? "a devolver" : "no reembolsado"}</span>
+                    {cobrado > 0 ? (
+                      <span className="font-medium text-ambar-600">Cobrado {formatoEuros(cobrado)}</span>
+                    ) : sePuedeCobrar(r) ? (
+                      <span className="font-medium text-red-700">Pendiente de cobrar</span>
+                    ) : r.tarjeta ? (
+                      <span className="text-tinta-suave">{r.tarjeta.replace(/^.* (····)/, "$1")}</span>
+                    ) : (
+                      <span className="text-tinta-tenue">—</span>
                     )}
+                    {r.canceladaTarde && <span className="block text-xs text-tinta-tenue">cancelada con &lt; 24 h</span>}
                   </td>
                 </tr>
               );

@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import IlustracionEspecialidad from "@/components/IlustracionEspecialidad";
-import { formatoEuros, turnos } from "@/lib/datos";
+import { PORCENTAJE_AUSENCIA, formatoEuros, importeAusencia, turnos } from "@/lib/datos";
 import { aISO, claveHueco, fechaLarga, huecosDelDia, limiteReserva, type Hueco, type Ocupados } from "@/lib/agenda";
 import type { DiaSemana } from "@/lib/catalogo";
 import { mensajeError, supabaseNavegador } from "@/lib/supabase/cliente";
 import { useCatalogo } from "@/components/CatalogoProvider";
 import Calendario from "./Calendario";
-import type { DatosPaciente, MetodoPago } from "./tipos";
+import type { DatosPaciente } from "./tipos";
 
 /* ================================================================== */
 /* Comunes                                                             */
@@ -42,7 +42,7 @@ export function PasoEspecialidad({
   const especialidades = useCatalogo().especialidades.filter((e) => e.activa);
   return (
     <>
-      <TituloPaso titulo="¿Qué necesitas?" texto="Elige la especialidad. Verás el precio y el anticipo antes de confirmar." />
+      <TituloPaso titulo="¿Qué necesitas?" texto="Elige la especialidad. No pagas nada al reservar: la consulta se paga en la clínica." />
       <ul className="grid gap-3 sm:grid-cols-2">
         {especialidades.map((esp) => (
           <li key={esp.id}>
@@ -53,8 +53,8 @@ export function PasoEspecialidad({
                 <span className="mt-0.5 block text-sm text-tinta-tenue">
                   {esp.duracionMin} min · {formatoEuros(esp.precio)}
                 </span>
-                <span className="mt-1 inline-block rounded-md bg-ambar-50 px-1.5 py-0.5 text-xs font-medium text-ambar-700">
-                  Anticipo {formatoEuros(esp.deposito)}
+                <span className="mt-1 inline-block rounded-md bg-brand-50 px-1.5 py-0.5 text-xs font-medium text-brand-700">
+                  0 € al reservar
                 </span>
               </span>
             </button>
@@ -419,8 +419,8 @@ export function PasoDatos({
             />
             <span className="text-sm text-tinta-suave">
               Acepto la <a href="/legal/privacidad" target="_blank" rel="noopener" className="font-medium text-brand-600 underline">política de privacidad</a> y la{" "}
-              <a href="/legal/cancelacion" target="_blank" rel="noopener" className="font-medium text-brand-600 underline">política de cancelación</a>: el anticipo se
-              devuelve si cancelo con al menos 24 horas de antelación.
+              <a href="/legal/cancelacion" target="_blank" rel="noopener" className="font-medium text-brand-600 underline">política de cancelación</a>: si no acudo o cancelo con menos de 24 horas de antelación, se me
+              podrá cobrar el {PORCENTAJE_AUSENCIA} % del precio de la cita.
             </span>
           </label>
           {errores.acepta && <p className="mt-1.5 text-sm text-red-600">{errores.acepta}</p>}
@@ -434,74 +434,37 @@ export function PasoDatos({
 /* 5. Pago                                                             */
 /* ================================================================== */
 
-export function PasoPago({
-  deposito,
-  metodo,
-  onMetodo,
-}: {
-  deposito: number;
-  metodo: MetodoPago;
-  onMetodo: (m: MetodoPago) => void;
-}) {
+export function PasoPago({ precio }: { precio: number }) {
   const { pagoOnline } = useCatalogo();
-  const opciones: { id: MetodoPago; nombre: string; texto: string; icono: React.ReactNode }[] = [
-    {
-      id: "tarjeta",
-      nombre: "Tarjeta",
-      texto: "Visa, Mastercard, Maestro",
-      icono: (
-        <>
-          <rect x="3" y="5.5" width="18" height="13" rx="2" />
-          <path d="M3 10h18M7 15h3" />
-        </>
-      ),
-    },
-    {
-      id: "bizum",
-      nombre: "Bizum",
-      texto: "Con tu número de móvil",
-      icono: (
-        <>
-          <rect x="7" y="2.5" width="10" height="19" rx="2" />
-          <path d="M11 18.5h2" />
-        </>
-      ),
-    },
-  ];
+  const fila = (etiqueta: string, detalle: string, valor: string, clase: string) => (
+    <div className="flex items-center justify-between gap-4 px-5 py-4">
+      <div>
+        <p className="font-medium">{etiqueta}</p>
+        <p className="text-sm text-tinta-tenue">{detalle}</p>
+      </div>
+      <p className={`shrink-0 text-2xl font-semibold tabular-nums ${clase}`}>{valor}</p>
+    </div>
+  );
 
   return (
     <>
-      <TituloPaso titulo="Paga el anticipo" texto={`Confirmas tu cita pagando ahora ${formatoEuros(deposito)}. El resto lo pagas en la clínica.`} />
+      <TituloPaso
+        titulo="Deja tu tarjeta como garantía"
+        texto="No se te cobra nada ahora. Solo la guardamos para reservarte el hueco."
+      />
 
-      <div className="mb-6 flex items-center justify-between rounded-2xl bg-ambar-50 p-5 ring-1 ring-ambar-100">
-        <div>
-          <p className="text-sm font-medium text-ambar-700">A pagar ahora</p>
-          <p className="text-xs text-ambar-700/80">Reembolsable hasta 24 h antes</p>
+      <div className="divide-y divide-linea overflow-hidden rounded-2xl bg-white ring-1 ring-linea">
+        {fila("Hoy pagas", "Al reservar no se cobra nada", "0 €", "text-brand-600")}
+        {fila("En la clínica", "Pagas la consulta el día de la cita", formatoEuros(precio), "")}
+        <div className="bg-ambar-50">
+          {fila(
+            "Solo si no vienes",
+            `O si cancelas con menos de 24 h: el ${PORCENTAJE_AUSENCIA} % de la cita`,
+            formatoEuros(importeAusencia(precio)),
+            "text-ambar-600"
+          )}
         </div>
-        <p className="text-3xl font-semibold tabular-nums text-ambar-600">{formatoEuros(deposito)}</p>
       </div>
-
-{!pagoOnline && (
-      <fieldset>
-        <legend className="mb-3 text-sm font-medium">Método de pago</legend>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {opciones.map((o) => (
-            <label key={o.id} className={`${tarjetaSeleccionable(metodo === o.id)} flex cursor-pointer items-center gap-4 p-4`}>
-              <input type="radio" name="metodo" value={o.id} checked={metodo === o.id} onChange={() => onMetodo(o.id)} className="sr-only" />
-              <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${metodo === o.id ? "bg-brand-500 text-white" : "bg-brand-50 text-brand-600"}`}>
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  {o.icono}
-                </svg>
-              </span>
-              <span>
-                <span className="block font-semibold">{o.nombre}</span>
-                <span className="block text-sm text-tinta-tenue">{o.texto}</span>
-              </span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-      )}
 
       <p className="mt-6 flex gap-2 rounded-xl bg-white p-4 text-sm text-tinta-suave ring-1 ring-linea">
         <svg viewBox="0 0 20 20" className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -510,13 +473,13 @@ export function PasoPago({
         </svg>
         {pagoOnline ? (
           <span>
-            Al pulsar «Pagar» irás a la página de pago segura de Stripe (tarjeta, Apple Pay o Google Pay). Tu hueco queda
-            apartado 30 minutos mientras pagas.
+            Al pulsar «Confirmar con tarjeta» irás a la página segura de Stripe para guardarla. La clínica nunca ve el
+            número de tu tarjeta. Tu hueco queda apartado 30 minutos mientras tanto.
           </span>
         ) : (
           <span>
-            <strong className="font-medium text-tinta">Modo de prueba: no se realiza ningún cargo.</strong> La cita se
-            confirma directamente.
+            <strong className="font-medium text-tinta">Modo de prueba: no se pide tarjeta.</strong> La cita se confirma
+            directamente.
           </span>
         )}
       </p>

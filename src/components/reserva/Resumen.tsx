@@ -1,11 +1,11 @@
 import { fechaLarga, desdeISO, sumarDias } from "@/lib/agenda";
-import { formatoEuros } from "@/lib/datos";
+import { PORCENTAJE_AUSENCIA, formatoEuros } from "@/lib/datos";
 import { useCatalogo } from "@/components/CatalogoProvider";
 import type { EstadoReserva } from "./tipos";
 
 /**
  * Fecha y hora límite para cancelar gratis (24 h antes de la cita).
- * Devuelve null si la cita es dentro de menos de 24 h (ya no es reembolsable).
+ * Devuelve null si la cita es dentro de menos de 24 h.
  */
 export function limiteCancelacion(fecha: string, hora: string, ahora = new Date()) {
   const [h, m] = hora.split(":").map(Number);
@@ -17,16 +17,26 @@ export function limiteCancelacion(fecha: string, hora: string, ahora = new Date(
 }
 
 /** Texto de la política de cancelación para una cita concreta. */
-export function AvisoCancelacion({ fecha, hora }: { fecha: string; hora: string }) {
+export function AvisoCancelacion({ fecha, hora, garantia = true }: { fecha: string; hora: string; garantia?: boolean }) {
   const limite = limiteCancelacion(fecha, hora);
+  if (!garantia) {
+    return limite ? (
+      <>
+        Puedes cambiar o cancelar tu cita hasta el <strong className="font-medium text-tinta">{limite}</strong>.
+      </>
+    ) : (
+      <>Si no puedes venir, avísanos cuanto antes para que otra persona aproveche el hueco.</>
+    );
+  }
   return limite ? (
     <>
-      Cancelación gratuita hasta el <strong className="font-medium text-tinta">{limite}</strong>.
+      Cancelación gratuita hasta el <strong className="font-medium text-tinta">{limite}</strong>. Después, o si no
+      acudes, se podrá cobrar el {PORCENTAJE_AUSENCIA} % de la cita.
     </>
   ) : (
     <>
       <strong className="font-medium text-ambar-700">Tu cita es dentro de menos de 24 horas.</strong> Si la
-      cancelas, el anticipo no se devuelve.
+      cancelas o no acudes, se podrá cobrar el {PORCENTAJE_AUSENCIA} % de la cita.
     </>
   );
 }
@@ -79,19 +89,13 @@ export default function Resumen({ estado }: { estado: EstadoReserva }) {
       </dl>
 
       <dl className="space-y-2 border-t border-linea bg-fondo/60 p-5 text-sm">
-        <div className="flex justify-between">
-          <dt className="text-tinta-suave">Precio total</dt>
-          <dd className="font-medium tabular-nums">{formatoEuros(esp.precio)}</dd>
-        </div>
-        <div className="-mx-2 flex items-center justify-between rounded-lg bg-ambar-50 px-2 py-2">
-          <dt className="font-medium text-ambar-700">Anticipo ahora</dt>
-          <dd className="text-lg font-semibold tabular-nums text-ambar-600">
-            {formatoEuros(esp.deposito)}
-          </dd>
+        <div className="-mx-2 flex items-center justify-between rounded-lg bg-brand-50 px-2 py-2">
+          <dt className="font-medium text-brand-700">Hoy pagas</dt>
+          <dd className="text-lg font-semibold tabular-nums text-brand-600">0 €</dd>
         </div>
         <div className="flex justify-between">
           <dt className="text-tinta-suave">En la clínica</dt>
-          <dd className="font-medium tabular-nums">{formatoEuros(esp.precio - esp.deposito)}</dd>
+          <dd className="font-medium tabular-nums">{formatoEuros(esp.precio)}</dd>
         </div>
       </dl>
 

@@ -32,4 +32,4 @@ export const datosVacios: DatosPaciente = {
   acepta: false,
 };
 
-export const PASOS = ["Especialidad", "Profesional", "Día y hora", "Tus datos", "Pago"] as const;
+export const PASOS = ["Especialidad", "Profesional", "Día y hora", "Tus datos", "Garantía"] as const;

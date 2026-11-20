@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import PaginaLegal, { Seccion } from "@/components/legal/PaginaLegal";
-import { contacto, diasReservables } from "@/lib/datos";
+import { PORCENTAJE_AUSENCIA, contacto, diasReservables } from "@/lib/datos";
 
 export const metadata: Metadata = { title: "Reserva y cancelación · Policlínico Redondela" };
 
@@ -13,30 +13,37 @@ export default function Cancelacion() {
           eliges especialidad, profesional, día y hora, y nos facilitas tus datos de contacto.
         </p>
         <p>
-          La cita queda <strong>confirmada cuando se paga el anticipo</strong>. Mientras completas el pago, tu hueco queda
-          apartado durante 30 minutos; si no se completa en ese tiempo, el hueco se libera.
+          La cita queda <strong>confirmada cuando dejas tu tarjeta como garantía</strong>. Mientras la añades, tu hueco
+          queda apartado durante 30 minutos; si no terminas en ese tiempo, el hueco se libera.
         </p>
       </Seccion>
 
-      <Seccion titulo="El anticipo">
+      <Seccion titulo="La tarjeta en garantía">
         <p>
-          El anticipo es una parte del precio de la consulta que se paga al reservar con tarjeta a través de una pasarela de
-          pago segura. <strong>El resto se paga en la clínica el día de la cita.</strong> El importe del anticipo y el
-          precio total se muestran antes de pagar.
+          <strong>Al reservar no se te cobra nada.</strong> Solo guardamos tu tarjeta a través de una pasarela de pago
+          segura (Stripe) para garantizar la cita. La consulta se paga completa en la clínica el día de la cita.
+        </p>
+        <p>
+          La clínica nunca ve ni guarda el número de tu tarjeta: solo una referencia de la pasarela y sus últimas cuatro
+          cifras, para que puedas identificarla.
         </p>
         <p>Sirve para reducir las citas a las que nadie acude y que esos huecos lleguen a quien los necesita.</p>
       </Seccion>
 
-      <Seccion titulo="Cambios y cancelaciones">
+      <Seccion titulo="Cambios, cancelaciones y ausencias">
         <ul>
           <li>
             <strong>Con más de 24 horas de antelación</strong> puedes cambiar el día o la hora, o cancelar la cita, sin
-            coste. Si cancelas, te devolvemos el anticipo completo por el mismo medio de pago. La devolución puede tardar
-            entre 5 y 10 días hábiles en reflejarse, según tu banco.
+            ningún coste.
           </li>
           <li>
-            <strong>Con menos de 24 horas de antelación</strong>, o si no acudes a la cita, el anticipo no se devuelve.
-            Si se debe a una causa justificada (enfermedad, urgencia familiar…), llámanos y lo valoraremos.
+            <strong>Si cancelas con menos de 24 horas de antelación, o no acudes a la cita</strong>, la clínica podrá
+            cobrar en tu tarjeta el <strong>{PORCENTAJE_AUSENCIA} % del precio de la cita</strong>. El importe exacto se
+            muestra antes de reservar. Si se cobra, te avisaremos por email.
+          </li>
+          <li>
+            Si se debe a una causa justificada (enfermedad, urgencia familiar…), llámanos y lo valoraremos antes de
+            cobrar nada.
           </li>
           <li>
             Puedes gestionar tu cita desde el enlace del email de confirmación o desde «Mi cita» con tu código de reserva
@@ -47,8 +54,8 @@ export default function Cancelacion() {
 
       <Seccion titulo="Si la clínica cancela la cita">
         <p>
-          Si por cualquier motivo tenemos que cancelar o cambiar tu cita, te avisaremos lo antes posible y te
-          devolveremos el anticipo íntegro, o te ofreceremos otra fecha si lo prefieres.
+          Si por cualquier motivo tenemos que cancelar o cambiar tu cita, te avisaremos lo antes posible y no se te
+          cobrará nada. Te ofreceremos otra fecha si lo prefieres.
         </p>
       </Seccion>
 

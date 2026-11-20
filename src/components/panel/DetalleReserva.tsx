@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { fechaLarga } from "@/lib/agenda";
-import { formatoEuros } from "@/lib/datos";
-import { METODOS, anticipoCobrado, type ReservaPanel } from "@/lib/panel";
+import { PORCENTAJE_AUSENCIA, formatoEuros, importeAusencia } from "@/lib/datos";
+import { cobroAusencia, sePuedeCobrar, type ReservaPanel } from "@/lib/panel";
 import { usePanel } from "./PanelProvider";
 import { BadgeEstado, Cajon, btn } from "./ui";
 
@@ -34,9 +34,9 @@ export default function DetalleReserva({
   onCerrar: () => void;
   onAviso: (texto: string) => void;
 }) {
-  const { especialidades, profesionales, actualizarReserva, reembolsar, avisarPaciente, ahora } = usePanel();
+  const { especialidades, profesionales, actualizarReserva, cobro, avisarPaciente, ahora } = usePanel();
   const [cancelando, setCancelando] = useState(false);
-  const [devolver, setDevolver] = useState(true);
+  const [confirmarCobro, setConfirmarCobro] = useState<"cobrar" | "devolver" | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,8 +45,8 @@ export default function DetalleReserva({
   const esp = especialidades.find((e) => e.id === r.especialidadId);
   const prof = profesionales.find((p) => p.id === r.profesionalId);
   const precio = r.precio;
-  const anticipoPagado = anticipoCobrado(r);
-  const enPlazo = new Date(`${r.fecha}T${r.hora}:00`).getTime() - ahora.getTime() > 24 * 3600 * 1000;
+  const ausencia = importeAusencia(precio);
+  const cobrado = cobroAusencia(r);
   const pasada = new Date(`${r.fecha}T${r.hora}:00`) < ahora;
   const tel = r.paciente.telefono.replace(/\s/g, "");
 
@@ -59,21 +59,9 @@ export default function DetalleReserva({
       setGuardando(false);
       return setError(err);
     }
-    // Cancelada con devolución de un pago online: devolver en la pasarela
-    if (cambios.estado === "cancelada" && cambios.reembolso && r.pagoRef) {
-      const errDev = await reembolsar(r.id);
-      if (errDev) {
-        setGuardando(false);
-        onAviso(`${r.id} cancelada, pero la devolución falló: ${errDev}`);
-        setCancelando(false);
-        onCerrar();
-        return;
-      }
-      texto += " · anticipo devuelto a la tarjeta";
-    }
     // Avisar al paciente de la cancelación (si tiene email y la cita estaba en pie)
     if (cambios.estado === "cancelada" && r.paciente.email && r.estado !== "pendiente_pago") {
-      if (await avisarPaciente(r.id, "cancelacion", !!cambios.reembolso)) texto += " · paciente avisado por email";
+      if (await avisarPaciente(r.id, "cancelacion")) texto += " · paciente avisado por email";
     }
     setGuardando(false);
     onAviso(texto);
@@ -81,7 +69,56 @@ export default function DetalleReserva({
     onCerrar();
   };
 
+  const hacerCobro = async (accion: "cobrar" | "devolver") => {
+    setGuardando(true);
+    setError(null);
+    const { error: err, importe } = await cobro(r.id, accion);
+    setGuardando(false);
+    setConfirmarCobro(null);
+    if (err) return setError(err);
+    onAviso(
+      accion === "cobrar"
+        ? `Cobrados ${formatoEuros(importe ?? ausencia)} a ${r.paciente.nombre}${r.paciente.email ? " · avisado por email" : ""}`
+        : `Devueltos ${formatoEuros(importe ?? cobrado)} a la tarjeta de ${r.paciente.nombre}`
+    );
+    onCerrar();
+  };
+
+  /** Botones de cobro para no presentados y cancelaciones tardías */
+  const botonesCobro = () =>
+    confirmarCobro ? (
+      <div className="space-y-3 rounded-xl bg-fondo p-3">
+        <p className="text-sm">
+          {confirmarCobro === "cobrar" ? (
+            <>
+              Se cobrarán <strong>{formatoEuros(ausencia)}</strong> ({PORCENTAJE_AUSENCIA} % de {formatoEuros(precio)}) a la{" "}
+              {r.tarjeta}. El paciente recibirá un email.
+            </>
+          ) : (
+            <>
+              Se devolverán <strong>{formatoEuros(cobrado)}</strong> a la {r.tarjeta}. Tarda 5–10 días en verse en su cuenta.
+            </>
+          )}
+        </p>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setConfirmarCobro(null)} className={`${btn.secundario} flex-1`}>Volver</button>
+          <button type="button" onClick={() => void hacerCobro(confirmarCobro)} className={`${confirmarCobro === "cobrar" ? btn.primario : btn.peligro} flex-1`}>
+            {guardando ? "Un momento…" : confirmarCobro === "cobrar" ? `Sí, cobrar ${formatoEuros(ausencia)}` : "Sí, devolver"}
+          </button>
+        </div>
+      </div>
+    ) : sePuedeCobrar(r) ? (
+      <button type="button" onClick={() => setConfirmarCobro("cobrar")} className={`${btn.primario} w-full`}>
+        Cobrar {formatoEuros(ausencia)} ({PORCENTAJE_AUSENCIA} %)
+      </button>
+    ) : cobrado > 0 ? (
+      <button type="button" onClick={() => setConfirmarCobro("devolver")} className={`${btn.secundario} w-full`}>
+        Devolver el cobro ({formatoEuros(cobrado)})
+      </button>
+    ) : null;
+
   const cerrar = () => {
+    setConfirmarCobro(null);
     setCancelando(false);
     setError(null);
     onCerrar();
@@ -92,29 +129,14 @@ export default function DetalleReserva({
       return (
         <div className="space-y-3">
           <p className="text-sm font-semibold">¿Cancelar esta cita?</p>
-          {anticipoPagado > 0 && (
-            <fieldset className="space-y-2 text-sm">
-              <legend className="sr-only">Anticipo</legend>
-              <label className="flex items-center gap-2">
-                <input type="radio" checked={devolver} onChange={() => setDevolver(true)} className="accent-brand-500" />
-                Devolver el anticipo ({formatoEuros(anticipoPagado)})
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="radio" checked={!devolver} onChange={() => setDevolver(false)} className="accent-brand-500" />
-                No devolver {!enPlazo && <span className="text-tinta-tenue">(menos de 24 h)</span>}
-              </label>
-            </fieldset>
-          )}
+          <p className="text-sm text-tinta-suave">
+            El hueco queda libre{r.paciente.email ? " y el paciente recibe un email" : ""}. Al cancelarla la clínica, no se le cobra nada.
+          </p>
           <div className="flex gap-2">
             <button type="button" onClick={() => setCancelando(false)} className={`${btn.secundario} flex-1`}>Volver</button>
             <button
               type="button"
-              onClick={() =>
-                hacer(
-                  { estado: "cancelada", reembolso: anticipoPagado > 0 && devolver },
-                  `${r.id} cancelada${anticipoPagado > 0 && devolver ? " · anticipo a devolver" : ""}`
-                )
-              }
+              onClick={() => hacer({ estado: "cancelada", reembolso: false }, `${r.id} cancelada`)}
               className="flex-1 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
             >
               Sí, cancelar
@@ -128,7 +150,7 @@ export default function DetalleReserva({
         return (
           <div className="space-y-3">
             <p className="text-sm text-tinta-suave">
-              El paciente está pagando online. Si no paga
+              El paciente está añadiendo su tarjeta. Si no termina
               {r.expiraEn ? ` antes de las ${new Date(r.expiraEn).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}` : ""}, el hueco se libera solo.
             </p>
             <button type="button" onClick={() => hacer({ estado: "cancelada", reembolso: false }, `${r.id} cancelada; el hueco queda libre`)} className={`${btn.peligro} w-full`}>
@@ -137,43 +159,53 @@ export default function DetalleReserva({
           </div>
         );
       case "confirmada":
-        return (
-          <div className="grid gap-2 sm:grid-cols-2">
-            <button type="button" onClick={() => hacer({ estado: "completada" }, `${r.id} marcada como completada`)} className={btn.primario}>
-              Paciente atendido
-            </button>
-            <button type="button" onClick={() => { setDevolver(enPlazo); setCancelando(true); }} className={btn.peligro}>
-              Cancelar cita
-            </button>
-          </div>
-        );
       case "sin_deposito":
         return (
           <div className="grid gap-2 sm:grid-cols-2">
-            <button type="button" onClick={() => hacer({ estado: "confirmada", metodoPago: "recepcion" }, `Anticipo de ${r.id} cobrado en recepción`)} className={btn.primario}>
-              Anticipo cobrado
-            </button>
-            <button type="button" onClick={() => hacer({ estado: "completada" }, `${r.id} marcada como completada`)} className={btn.secundario}>
+            <button type="button" onClick={() => hacer({ estado: "completada" }, `${r.id} marcada como atendida`)} className={btn.primario}>
               Paciente atendido
             </button>
-            <button type="button" onClick={() => { setDevolver(false); setCancelando(true); }} className={`${btn.peligro} sm:col-span-2`}>
-              Cancelar cita
-            </button>
+            {pasada ? (
+              <button type="button" onClick={() => hacer({ estado: "no_presentado" }, `${r.id}: no se presentó`)} className={btn.peligro}>
+                No se presentó
+              </button>
+            ) : (
+              <button type="button" onClick={() => setCancelando(true)} className={btn.peligro}>
+                Cancelar cita
+              </button>
+            )}
           </div>
         );
       case "completada":
         return (
-          <button type="button" onClick={() => hacer({ estado: r.metodoPago ? "confirmada" : "sin_deposito" }, `${r.id} vuelve a estar pendiente`)} className={`${btn.secundario} w-full`}>
+          <button type="button" onClick={() => hacer({ estado: r.tarjeta || r.origen === "web" ? "confirmada" : "sin_deposito" }, `${r.id} vuelve a estar pendiente`)} className={`${btn.secundario} w-full`}>
             Deshacer: no se atendió
           </button>
         );
+      case "no_presentado":
+        return (
+          <div className="space-y-2">
+            {botonesCobro()}
+            {!r.tarjeta && <p className="text-center text-sm text-tinta-tenue">No dejó tarjeta en garantía: no se le puede cobrar online.</p>}
+            {cobrado === 0 && !confirmarCobro && (
+              <button type="button" onClick={() => hacer({ estado: "completada" }, `${r.id} marcada como atendida`)} className={`${btn.secundario} w-full`}>
+                Deshacer: sí vino
+              </button>
+            )}
+          </div>
+        );
       case "cancelada":
-        return pasada ? (
-          <p className="text-center text-sm text-tinta-tenue">Cita cancelada.</p>
-        ) : (
-          <button type="button" onClick={() => hacer({ estado: r.metodoPago ? "confirmada" : "sin_deposito", reembolso: false }, `${r.id} reactivada`)} className={`${btn.secundario} w-full`}>
-            Reactivar cita
-          </button>
+        return (
+          <div className="space-y-2">
+            {botonesCobro()}
+            {pasada || cobrado > 0 || confirmarCobro ? (
+              !sePuedeCobrar(r) && cobrado === 0 && <p className="text-center text-sm text-tinta-tenue">Cita cancelada.</p>
+            ) : (
+              <button type="button" onClick={() => hacer({ estado: r.tarjeta || r.origen === "web" ? "confirmada" : "sin_deposito", reembolso: false }, `${r.id} reactivada`)} className={`${btn.secundario} w-full`}>
+                Reactivar cita
+              </button>
+            )}
+          </div>
         );
     }
   })();
@@ -231,22 +263,37 @@ export default function DetalleReserva({
 
         <Bloque titulo="Pago">
           <dl className="divide-y divide-linea">
-            <Fila etiqueta="Precio">{formatoEuros(precio)}</Fila>
-            <Fila etiqueta="Anticipo">
-              {anticipoPagado > 0 ? (
-                <span className="text-ambar-600">{formatoEuros(anticipoPagado)} · {METODOS[r.metodoPago!]}</span>
-              ) : (
-                <span className="text-tinta-tenue">No pagado</span>
-              )}
+            <Fila etiqueta="Precio (en la clínica)">{formatoEuros(precio)}</Fila>
+            <Fila etiqueta="Tarjeta en garantía">
+              {r.tarjeta ?? <span className="text-tinta-tenue">{r.estado === "pendiente_pago" ? "Añadiéndola…" : "No"}</span>}
             </Fila>
-            {r.estado === "cancelada" ? (
-              <Fila etiqueta="Reembolso">{anticipoPagado > 0 ? (r.reembolso ? "Sí, a devolver" : "No") : "—"}</Fila>
-            ) : (
-              <Fila etiqueta={r.estado === "completada" ? "Cobrado en clínica" : "A cobrar en clínica"}>
-                {formatoEuros(precio - anticipoPagado)}
+            {r.tarjeta && (
+              <Fila etiqueta={`Si no viene (${PORCENTAJE_AUSENCIA} %)`}>
+                <span className="text-ambar-600">{formatoEuros(ausencia)}</span>
+              </Fila>
+            )}
+            {r.canceladaTarde && <Fila etiqueta="Cancelación">Con menos de 24 h</Fila>}
+            {r.cobrado !== null && (
+              <Fila etiqueta="Cobrado por ausencia">
+                {r.cobroDevuelto ? (
+                  <span className="text-tinta-tenue line-through">{formatoEuros(r.cobrado)}</span>
+                ) : (
+                  <span className="text-ambar-600">{formatoEuros(r.cobrado)}</span>
+                )}
+                <span className="block text-xs font-normal text-tinta-tenue">
+                  {r.cobroDevuelto
+                    ? "Devuelto"
+                    : r.cobroAt && new Date(r.cobroAt).toLocaleString("es-ES", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}
+                </span>
               </Fila>
             )}
           </dl>
+          {r.cobroError && cobrado === 0 && (
+            <p className="mt-2 rounded-xl bg-red-50 p-3 text-sm text-red-700">
+              <span className="block font-medium">Último intento de cobro rechazado</span>
+              {r.cobroError}
+            </p>
+          )}
         </Bloque>
 
         <p className="text-xs text-tinta-tenue">

@@ -12,7 +12,7 @@ type Estado = {
   claveSecretaConfigurada: boolean;
 };
 
-/** Interruptor del cobro online del anticipo (solo admin). */
+/** Interruptor de la tarjeta en garantía con Stripe (solo admin). */
 export default function AjustesPago({ onAviso }: { onAviso: (t: string) => void }) {
   const [online, setOnline] = useState<boolean | null>(null);
   const [estado, setEstado] = useState<Estado | null>(null);
@@ -38,7 +38,7 @@ export default function AjustesPago({ onAviso }: { onAviso: (t: string) => void 
     setGuardando(false);
     if (error) return onAviso("No se pudo guardar. ¿Has ejecutado el SQL de pagos en Supabase?");
     setOnline(valor);
-    onAviso(valor ? "Cobro online activado" : "Cobro online desactivado (pago simulado)");
+    onAviso(valor ? "Tarjeta en garantía activada" : "Tarjeta en garantía desactivada (modo simulado)");
   };
 
   const fila = (ok: boolean, puesta: boolean, texto: string, ayuda: string) => (
@@ -64,13 +64,13 @@ export default function AjustesPago({ onAviso }: { onAviso: (t: string) => void 
     <section className="mb-8 rounded-2xl bg-white p-5 ring-1 ring-linea">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="font-semibold">Cobro del anticipo</h2>
+          <h2 className="font-semibold">Tarjeta en garantía</h2>
           <p className="mt-1 text-sm text-tinta-suave">
             {online === null
               ? "Cargando…"
               : online
-                ? "Online con Stripe: la cita se confirma cuando el paciente paga."
-                : "Simulado: la cita se confirma sin cobrar nada. Solo para pruebas."}
+                ? "Online con Stripe: la cita se confirma cuando el paciente deja su tarjeta. No se cobra nada al reservar."
+                : "Simulado: la cita se confirma sin pedir tarjeta. Solo para pruebas."}
           </p>
           {estado?.stripe && (
             <p className={`mt-2 inline-block rounded-md px-2 py-0.5 text-xs font-medium ${estado.stripe === "real" ? "bg-brand-50 text-brand-700" : "bg-ambar-50 text-ambar-700"}`}>
@@ -96,7 +96,7 @@ export default function AjustesPago({ onAviso }: { onAviso: (t: string) => void 
       {estado && (
         <ul className="mt-4 space-y-2 border-t border-linea pt-4 text-sm">
           {fila(!!estado.stripe, estado.stripeConfigurado, "Clave de Stripe (STRIPE_SECRET_KEY)", "Debe empezar por sk_test_ (pruebas) o sk_live_ (real).")}
-          {fila(estado.webhook, estado.webhookConfigurado, "Aviso de pagos de Stripe (STRIPE_WEBHOOK_SECRET)", "Debe empezar por whsec_.")}
+          {fila(estado.webhook, estado.webhookConfigurado, "Avisos de Stripe (STRIPE_WEBHOOK_SECRET)", "Debe empezar por whsec_.")}
           {fila(
             estado.claveSecretaSupabase,
             estado.claveSecretaConfigurada,

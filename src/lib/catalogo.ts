@@ -34,7 +34,7 @@ export type Catalogo = {
   especialidades: Especialidad[];
   profesionales: Profesional[];
   festivos: Festivo[];
-  /** true: se cobra el anticipo con la pasarela; false: pago simulado */
+  /** true: el paciente deja la tarjeta en garantía (Stripe); false: modo simulado */
   pagoOnline: boolean;
 };
 

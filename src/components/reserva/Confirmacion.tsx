@@ -66,13 +66,13 @@ export default function Confirmacion({
         <div className="mx-6 border-t-2 border-dashed border-linea" aria-hidden="true" />
 
         <dl className="grid grid-cols-2 gap-3 p-6 text-sm">
-          <div className="rounded-xl bg-ambar-50 p-3">
-            <dt className="text-ambar-700">Anticipo pagado</dt>
-            <dd className="text-xl font-semibold tabular-nums text-ambar-600">{formatoEuros(esp.deposito)}</dd>
+          <div className="rounded-xl bg-brand-50 p-3">
+            <dt className="text-brand-700">Pagado al reservar</dt>
+            <dd className="text-xl font-semibold tabular-nums text-brand-600">0 €</dd>
           </div>
           <div className="rounded-xl bg-fondo p-3">
             <dt className="text-tinta-suave">A pagar en la clínica</dt>
-            <dd className="text-xl font-semibold tabular-nums">{formatoEuros(esp.precio - esp.deposito)}</dd>
+            <dd className="text-xl font-semibold tabular-nums">{formatoEuros(esp.precio)}</dd>
           </div>
         </dl>
       </div>

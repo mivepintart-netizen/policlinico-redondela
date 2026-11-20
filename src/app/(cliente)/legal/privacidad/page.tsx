@@ -32,8 +32,9 @@ export default function Privacidad() {
             personal de la clínica para preparar la cita.
           </li>
           <li>
-            <strong>Datos de pago:</strong> el pago lo gestiona la pasarela (Stripe). Nosotros no vemos ni guardamos los
-            datos de tu tarjeta; solo una referencia del pago para poder hacer devoluciones.
+            <strong>Datos de la tarjeta en garantía:</strong> la tarjeta la guarda la pasarela de pago (Stripe). Nosotros no
+            vemos ni guardamos su número; solo una referencia de Stripe, la marca y las cuatro últimas cifras, y la referencia
+            de los cobros por ausencia si los hubiera.
           </li>
         </ul>
       </Seccion>
@@ -41,7 +42,7 @@ export default function Privacidad() {
       <Seccion titulo="3. Para qué y con qué base legal">
         <ul>
           <li>
-            <strong>Gestionar tu cita</strong> (reserva, cobro del anticipo, cambios, cancelaciones y devoluciones):
+            <strong>Gestionar tu cita</strong> (reserva, tarjeta en garantía, cambios, cancelaciones y, en su caso, cobro por ausencia):
             ejecución de la relación que solicitas (art. 6.1.b del RGPD).
           </li>
           <li>

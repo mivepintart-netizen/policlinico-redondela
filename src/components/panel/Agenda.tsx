@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { aISO, desdeISO, fechaLarga, sumarDias } from "@/lib/agenda";
 import { formatoEuros, turnos } from "@/lib/datos";
 import type { DiaSemana } from "@/lib/catalogo";
-import { ESTADOS, anticipoCobrado, esActiva, type ReservaPanel } from "@/lib/panel";
+import { ESTADOS, cobroAusencia, esActiva, type ReservaPanel } from "@/lib/panel";
 import DetalleReserva from "./DetalleReserva";
 import EnviarEnlace from "./EnviarEnlace";
 import NuevaReserva from "./NuevaReserva";
@@ -23,6 +23,7 @@ const COLOR_BLOQUE: Record<ReservaPanel["estado"], string> = {
   confirmada: "bg-brand-50 ring-brand-200 hover:ring-brand-400 border-l-brand-500",
   sin_deposito: "bg-ambar-50 ring-ambar-100 hover:ring-ambar-500 border-l-ambar-500",
   completada: "bg-slate-50 ring-slate-200 hover:ring-slate-400 border-l-slate-400 text-tinta-suave",
+  no_presentado: "bg-red-50 ring-red-200 hover:ring-red-400 border-l-red-700 text-red-800",
   cancelada: "bg-red-50/60 ring-red-100 hover:ring-red-300 border-l-red-400 text-tinta-tenue line-through",
 };
 
@@ -56,10 +57,13 @@ export default function Agenda() {
 
   // Cifras del día
   const activas = delDia.filter(esActiva);
-  const cobradoAnticipos = activas.reduce((s, r) => s + anticipoCobrado(r), 0);
-  const pendienteClinica = activas.filter((r) => r.estado !== "completada").reduce((s, r) => s + r.precio - anticipoCobrado(r), 0);
+  const conTarjeta = activas.filter((r) => !!r.tarjeta).length;
+  const pendienteClinica = activas
+    .filter((r) => r.estado !== "completada" && r.estado !== "no_presentado")
+    .reduce((s, r) => s + r.precio, 0);
   const completadas = activas.filter((r) => r.estado === "completada").length;
-  const sinAnticipo = activas.filter((r) => r.estado === "sin_deposito").length;
+  const noVinieron = activas.filter((r) => r.estado === "no_presentado").length;
+  const cobradoAusencias = delDia.reduce((s, r) => s + cobroAusencia(r), 0);
   const canceladas = delDia.length - activas.length;
 
   const minutoAhora = ahora.getHours() * 60 + ahora.getMinutes();
@@ -93,9 +97,14 @@ export default function Agenda() {
       {/* Cifras */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi etiqueta="Citas" valor={activas.length} detalle={`${completadas} ${completadas === 1 ? "atendida" : "atendidas"}${canceladas ? ` · ${canceladas} ${canceladas === 1 ? "cancelada" : "canceladas"}` : ""}`} />
-        <Kpi etiqueta="Anticipos cobrados" valor={formatoEuros(cobradoAnticipos)} acento detalle="Pagados online o en recepción" />
+        <Kpi etiqueta="Con tarjeta en garantía" valor={`${conTarjeta} de ${activas.length}`} detalle="Reservadas online con tarjeta" />
         <Kpi etiqueta="Pendiente de cobro" valor={formatoEuros(pendienteClinica)} detalle="A cobrar en la clínica" />
-        <Kpi etiqueta="Sin anticipo" valor={sinAnticipo} detalle={sinAnticipo ? "Cobrar todo en la clínica" : "Todas con anticipo"} />
+        <Kpi
+          etiqueta="No se presentaron"
+          valor={noVinieron}
+          acento={cobradoAusencias > 0}
+          detalle={cobradoAusencias > 0 ? `Cobrado por ausencias: ${formatoEuros(cobradoAusencias)}` : "Ninguna ausencia cobrada"}
+        />
       </div>
 
       {festivo && (
@@ -116,7 +125,7 @@ export default function Agenda() {
           Mostrar canceladas
         </label>
         <div className="ml-auto hidden flex-wrap gap-3 text-xs text-tinta-suave sm:flex">
-          {(["confirmada", "sin_deposito", "completada"] as const).map((e) => (
+          {(["confirmada", "sin_deposito", "completada", "no_presentado"] as const).map((e) => (
             <span key={e} className="flex items-center gap-1.5">
               <span className={`h-2 w-2 rounded-full ${ESTADOS[e].punto}`} />
               {ESTADOS[e].texto}

@@ -12,7 +12,10 @@ import { mensajeError, supabaseNavegador } from "@/lib/supabase/cliente";
  * modificar nada.
  */
 
-export type NuevaReservaPanel = Omit<ReservaPanel, "id" | "token" | "creadaEl" | "reembolso" | "pagoRef" | "pagoOnline" | "expiraEn" | "recordatorioAt">;
+export type NuevaReservaPanel = Pick<
+  ReservaPanel,
+  "especialidadId" | "profesionalId" | "fecha" | "hora" | "precio" | "deposito" | "estado" | "metodoPago" | "paciente" | "origen"
+>;
 
 type Resultado = string | null; // null = sin error; texto = mensaje de error
 
@@ -32,10 +35,10 @@ type Contexto = {
   cargarReservas: (desde: string, hasta: string) => Promise<ReservaPanel[]>;
   actualizarReserva: (r: ReservaPanel, cambios: Partial<ReservaPanel>) => Promise<Resultado>;
   crearReserva: (r: NuevaReservaPanel) => Promise<{ id?: string; error: Resultado }>;
-  /** Devuelve en la pasarela el anticipo de una reserva ya cancelada con reembolso */
-  reembolsar: (id: string) => Promise<Resultado>;
+  /** Cobra el 50 % de la tarjeta en garantía, o devuelve ese cobro */
+  cobro: (id: string, accion: "cobrar" | "devolver") => Promise<{ error: Resultado; importe?: number }>;
   /** Envía un email al paciente (no bloquea; devuelve si se envió) */
-  avisarPaciente: (id: string, tipo: "cancelacion" | "cambio", reembolso?: boolean) => Promise<boolean>;
+  avisarPaciente: (id: string, tipo: "cancelacion" | "cambio") => Promise<boolean>;
 
   guardarProfesional: (p: Profesional, nuevo?: boolean) => Promise<Resultado>;
   guardarEspecialidades: (e: Especialidad[]) => Promise<Resultado>;
@@ -248,24 +251,26 @@ export default function PanelProvider({ children }: { children: React.ReactNode 
         return { id: res.data?.id, error };
       },
 
-      reembolsar: async (id) => {
+      cobro: async (id, accion) => {
         const { data } = await sb.auth.getSession();
-        const res = await fetch("/api/panel/reembolso", {
+        const res = await fetch("/api/panel/cobro", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token ?? ""}` },
-          body: JSON.stringify({ id }),
+          body: JSON.stringify({ id, accion }),
         }).catch(() => null);
-        if (!res) return "No hay conexión. La devolución no se ha hecho.";
-        const cuerpo = (await res.json().catch(() => ({}))) as { error?: string };
-        return res.ok ? null : cuerpo.error ?? "No se pudo hacer la devolución.";
+        // Recargar siempre: el intento (bien o mal) queda guardado en la reserva
+        setVersion((v) => v + 1);
+        if (!res) return { error: "No hay conexión. No se ha hecho nada." };
+        const cuerpo = (await res.json().catch(() => ({}))) as { error?: string; importe?: number };
+        return res.ok ? { error: null, importe: cuerpo.importe } : { error: cuerpo.error ?? "No se pudo completar." };
       },
 
-      avisarPaciente: async (id, tipo, reembolso) => {
+      avisarPaciente: async (id, tipo) => {
         const { data } = await sb.auth.getSession();
         const res = await fetch("/api/panel/email", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session?.access_token ?? ""}` },
-          body: JSON.stringify({ id, tipo, reembolso }),
+          body: JSON.stringify({ id, tipo }),
         }).catch(() => null);
         const cuerpo = (await res?.json().catch(() => ({}))) as { enviado?: boolean } | undefined;
         return !!cuerpo?.enviado;
@@ -295,7 +300,7 @@ export default function PanelProvider({ children }: { children: React.ReactNode 
             descripcion_corta: e.descripcionCorta,
             duracion_min: e.duracionMin,
             precio: e.precio,
-            deposito: e.deposito,
+            deposito: 0, // ya no hay anticipo: tarjeta en garantía
             activa: e.activa,
             orden: e.orden,
           }))

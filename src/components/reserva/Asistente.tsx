@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { formatoEuros } from "@/lib/datos";
 import type { Hueco } from "@/lib/agenda";
 import { mensajeError, supabaseNavegador } from "@/lib/supabase/cliente";
 import { useCatalogo } from "@/components/CatalogoProvider";
@@ -77,8 +76,8 @@ export default function Asistente({ especialidadInicial }: { especialidadInicial
     setPagando(true);
     setErrorPago(null);
     const { datos } = estado;
-    // PAGO SIMULADO: aquí irá la pasarela (Redsys/Stripe). De momento se
-    // registra la reserva directamente como confirmada.
+    // Con la tarjeta en garantía activada, la reserva queda esperando a que el
+    // paciente guarde su tarjeta en Stripe; en modo simulado se confirma ya.
     const { data, error } = await supabaseNavegador().rpc("crear_reserva", {
       p_especialidad_id: estado.especialidadId!,
       p_profesional_id: estado.hueco!.profesionalId,
@@ -105,7 +104,7 @@ export default function Asistente({ especialidadInicial }: { especialidadInicial
       setErrorPago(texto);
       return;
     }
-    // ¿Hay que cobrar online? (lo decide la base de datos según los ajustes)
+    // ¿Hay que guardar la tarjeta? (lo decide la base de datos según los ajustes)
     const { data: cita } = await supabaseNavegador().rpc("obtener_reserva_por_token", { p_token: fila.token_acceso });
     if (cita?.[0]?.estado === "pendiente_pago") {
       const res = await fetch("/api/pago/iniciar", {
@@ -115,12 +114,12 @@ export default function Asistente({ especialidadInicial }: { especialidadInicial
       }).catch(() => null);
       const cuerpo = (await res?.json().catch(() => ({}))) as { url?: string; error?: string } | undefined;
       if (res?.ok && cuerpo?.url) {
-        window.location.href = cuerpo.url; // a la página de pago de Stripe
+        window.location.href = cuerpo.url; // a la página segura de Stripe
         return;
       }
       setPagando(false);
       setErrorPago(
-        `${cuerpo?.error ?? "No se pudo abrir la página de pago."} Tu hueco está apartado 30 minutos: puedes reintentar el pago desde «Mi cita» con el código ${fila.id}.`
+        `${cuerpo?.error ?? "No se pudo abrir la página de la tarjeta."} Tu hueco está apartado 30 minutos: puedes reintentarlo desde «Mi cita» con el código ${fila.id}.`
       );
       setToken(fila.token_acceso);
       return;
@@ -182,9 +181,11 @@ export default function Asistente({ especialidadInicial }: { especialidadInicial
     paso === 4
       ? pagando
         ? pagoOnline
-          ? "Abriendo el pago seguro…"
+          ? "Abriendo la página segura…"
           : "Confirmando…"
-        : `Pagar ${formatoEuros(esp?.deposito ?? 0)}${pagoOnline ? "" : " y confirmar"}`
+        : pagoOnline
+          ? "Confirmar con tarjeta"
+          : "Confirmar cita"
       : "Continuar";
 
   return (
@@ -202,8 +203,8 @@ export default function Asistente({ especialidadInicial }: { especialidadInicial
                   {estado.hueco && <span className="text-tinta-suave"> · {estado.hueco.hora}</span>}
                 </span>
                 <span className="flex items-center gap-2">
-                  <span className="rounded-md bg-ambar-50 px-2 py-0.5 font-semibold tabular-nums text-ambar-600">
-                    {formatoEuros(esp.deposito)}
+                  <span className="rounded-md bg-brand-50 px-2 py-0.5 font-semibold tabular-nums text-brand-700">
+                    0 € hoy
                   </span>
                   <span className="text-tinta-tenue transition group-open:rotate-180" aria-hidden="true">▾</span>
                 </span>
@@ -242,11 +243,7 @@ export default function Asistente({ especialidadInicial }: { especialidadInicial
             />
           )}
           {paso === 4 && esp && (
-            <PasoPago
-              deposito={esp.deposito}
-              metodo={estado.metodoPago}
-              onMetodo={(m) => setEstado((s) => ({ ...s, metodoPago: m }))}
-            />
+            <PasoPago precio={esp.precio} />
           )}
 
           {errorPago && (

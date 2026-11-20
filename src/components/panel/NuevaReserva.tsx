@@ -35,7 +35,6 @@ export default function NuevaReserva({
   const [fecha, setFecha] = useState(fechaInicial && fechaInicial >= hoy ? fechaInicial : hoy);
   const [hora, setHora] = useState("");
   const [paciente, setPaciente] = useState(vacio);
-  const [pago, setPago] = useState<"sin_deposito" | "recepcion">("sin_deposito");
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState(false);
   const [errorGuardar, setErrorGuardar] = useState<string | null>(null);
@@ -67,7 +66,6 @@ export default function NuevaReserva({
     setProfId("");
     setHora("");
     setPaciente(vacio);
-    setPago("sin_deposito");
     setErrores({});
   };
 
@@ -89,11 +87,12 @@ export default function NuevaReserva({
       profesionalId: prof!.id,
       fecha,
       hora,
-      // Precio y anticipo actuales de la especialidad
+      // Precio actual de la especialidad
       precio: esp!.precio,
-      deposito: esp!.deposito,
-      estado: pago === "recepcion" ? "confirmada" : "sin_deposito",
-      metodoPago: pago === "recepcion" ? "recepcion" : null,
+      deposito: 0,
+      // Sin tarjeta en garantía: el paciente paga todo en la clínica
+      estado: "sin_deposito",
+      metodoPago: null,
       paciente: {
         nombre: paciente.nombre.trim(),
         apellidos: paciente.apellidos.trim(),
@@ -226,18 +225,11 @@ export default function NuevaReserva({
           <div className="sm:col-span-2">{campoTexto("motivo", "Motivo (opcional)")}</div>
         </section>
 
-        <fieldset className="space-y-2 rounded-2xl bg-white p-4 ring-1 ring-linea">
-          <legend className="sr-only">Anticipo</legend>
-          <p className="text-sm font-medium">Anticipo {esp && <span className="text-ambar-600">({formatoEuros(esp.deposito)})</span>}</p>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="radio" checked={pago === "sin_deposito"} onChange={() => setPago("sin_deposito")} className="accent-brand-500" />
-            Sin anticipo: paga todo en la clínica
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="radio" checked={pago === "recepcion"} onChange={() => setPago("recepcion")} className="accent-brand-500" />
-            Anticipo cobrado ahora en recepción
-          </label>
-        </fieldset>
+        <p className="rounded-2xl bg-ambar-50 p-4 text-sm text-ambar-700 ring-1 ring-ambar-100">
+          Las citas creadas aquí <strong className="font-semibold">no tienen tarjeta en garantía</strong>
+          {esp && <> (el paciente paga {formatoEuros(esp.precio)} en la clínica)</>}. Si quieres que deje su tarjeta, usa
+          «Enviar enlace de reserva».
+        </p>
       </div>
     </Cajon>
   );

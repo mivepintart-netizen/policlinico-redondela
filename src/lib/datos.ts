@@ -42,5 +42,13 @@ export const turnos = {
 export const diasReservables = 60;
 
 export function formatoEuros(valor: number) {
-  return `${valor} €`;
+  // 40 → "40 €"; 22.5 → "22,50 €"
+  const texto = Number.isInteger(valor) ? String(valor) : valor.toFixed(2).replace(".", ",");
+  return `${texto} €`;
 }
+
+/** Porcentaje del precio que se cobra si el paciente no se presenta o cancela con menos de 24 h. */
+export const PORCENTAJE_AUSENCIA = 50;
+
+/** Importe (en euros) que se cobra por ausencia para un precio dado. */
+export const importeAusencia = (precio: number) => Math.round(precio * PORCENTAJE_AUSENCIA) / 100;

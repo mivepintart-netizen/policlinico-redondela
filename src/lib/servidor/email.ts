@@ -4,11 +4,11 @@
  */
 import { Resend } from "resend";
 import { fechaLarga, momento } from "../agenda";
-import { contacto, formatoEuros } from "../datos";
+import { PORCENTAJE_AUSENCIA, contacto, formatoEuros, importeAusencia } from "../datos";
 import type { FilaReserva } from "../database.types";
 import { supabaseAdmin } from "./admin";
 
-export type TipoEmail = "confirmacion" | "cambio" | "cancelacion" | "recordatorio";
+export type TipoEmail = "confirmacion" | "cambio" | "cancelacion" | "recordatorio" | "cobro";
 
 export const REMITENTE = () => process.env.EMAIL_REMITENTE || "Policlínico Redondela <onboarding@resend.dev>";
 
@@ -32,10 +32,13 @@ export function plantillaEmail(opts: {
   duracionMin: number;
   profesional: string;
   enlace: string;
-  reembolso?: boolean;
+  /** Cancelación con menos de 24 h (se puede cobrar el 50 %) */
+  tarde?: boolean;
 }) {
   const { tipo, r, enlace } = opts;
-  const anticipo = r.metodo_pago && r.estado !== "sin_deposito" && r.estado !== "pendiente_pago" ? r.deposito : 0;
+  const garantia = r.garantia_tarjeta;
+  const ausencia = formatoEuros(importeAusencia(r.precio));
+  const cobrado = formatoEuros((r.cobro_importe ?? 0) / 100);
   const nombre = esc(r.paciente_nombre);
   const cuando = `${fechaLarga(r.fecha).toLowerCase()} a las ${r.hora}`;
 
@@ -60,42 +63,52 @@ export function plantillaEmail(opts: {
       titulo: "Tu cita está cancelada",
       intro: `Hola ${nombre}, hemos cancelado tu cita. Si no lo has pedido tú, llámanos.`,
     },
+    cobro: {
+      asunto: `Cargo por cita no atendida: ${opts.especialidad}, ${cuando}`,
+      titulo: `Hemos cobrado el ${PORCENTAJE_AUSENCIA} % de tu cita`,
+      intro: `Hola ${nombre}, como no acudiste a tu cita o la cancelaste con menos de 24 horas de antelación, hemos cobrado <strong>${cobrado}</strong> a tu ${esc(garantia ?? "tarjeta")}, según las condiciones que aceptaste al reservar. Si crees que es un error, llámanos al ${contacto.telefono}.`,
+    },
   };
   const t = titulos[tipo];
 
   let pago = "";
+  const caja = (fondo: string, color: string, html: string) =>
+    `<p style="margin:0;padding:14px 16px;background:${fondo};border-radius:12px;color:${color};font-size:14px;line-height:1.5">${html}</p>`;
   if (tipo === "cancelacion") {
-    pago =
-      anticipo > 0
-        ? opts.reembolso
-          ? `<p style="margin:0;padding:14px 16px;background:#EAF6F7;border-radius:12px;color:#09555E;font-size:14px">Te devolvemos el anticipo de <strong>${formatoEuros(anticipo)}</strong> por el mismo medio de pago. Puede tardar entre 5 y 10 días hábiles en aparecer.</p>`
-          : `<p style="margin:0;padding:14px 16px;background:#FDF4EA;border-radius:12px;color:#9E5815;font-size:14px">Al cancelarse con menos de 24 horas de antelación, el anticipo de <strong>${formatoEuros(anticipo)}</strong> no se devuelve. Si fue por una causa justificada, llámanos.</p>`
-        : "";
-  } else {
+    pago = opts.tarde
+      ? caja("#FDF4EA", "#9E5815", `Has cancelado con menos de 24 horas de antelación. Según las condiciones de reserva, la clínica puede cobrar el ${PORCENTAJE_AUSENCIA} % de la cita (<strong>${ausencia}</strong>) a tu tarjeta. Si fue por una causa justificada, llámanos.`)
+      : "";
+  } else if (tipo !== "cobro") {
     pago = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:8px 0;margin:0 -8px">
       <tr>
-        <td style="background:#FDF4EA;border-radius:12px;padding:12px 14px;width:50%">
-          <div style="color:#9E5815;font-size:13px">${anticipo > 0 ? "Anticipo pagado" : "Anticipo"}</div>
-          <div style="color:#C9731F;font-size:20px;font-weight:700">${formatoEuros(anticipo)}</div>
+        <td style="background:#EAF6F7;border-radius:12px;padding:12px 14px;width:50%">
+          <div style="color:#09555E;font-size:13px">Pagado al reservar</div>
+          <div style="color:#0D7C8A;font-size:20px;font-weight:700">0 €</div>
         </td>
         <td style="background:#F6FBFB;border-radius:12px;padding:12px 14px;width:50%">
           <div style="color:#4A6670;font-size:13px">A pagar en la clínica</div>
-          <div style="color:#12333A;font-size:20px;font-weight:700">${formatoEuros(r.precio - anticipo)}</div>
+          <div style="color:#12333A;font-size:20px;font-weight:700">${formatoEuros(r.precio)}</div>
         </td>
       </tr>
-    </table>`;
+    </table>${garantia ? `<p style="margin:10px 0 0;color:#7C949B;font-size:13px">Tarjeta en garantía: ${esc(garantia)}</p>` : ""}`;
   }
 
   const limite = new Date(momento(r.fecha, r.hora).getTime() - 24 * 3600 * 1000);
   const politica =
     tipo === "recordatorio"
-      ? `<p style="margin:20px 0 0;color:#4A6670;font-size:14px;line-height:1.5">Llega 5 minutos antes. Si necesitas cambiar o cancelar, hazlo desde el botón de abajo o llámanos al ${contacto.telefono}.</p>`
-      : tipo !== "cancelacion"
-      ? `<p style="margin:20px 0 0;color:#4A6670;font-size:14px;line-height:1.5">Puedes cambiar o cancelar gratis hasta el <strong>${limite.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })} a las ${r.hora}</strong>. Después, el anticipo no se devuelve.</p>`
+      ? `<p style="margin:20px 0 0;color:#4A6670;font-size:14px;line-height:1.5">Llega 5 minutos antes. Si no puedes venir, avísanos desde el botón de abajo o llámanos al ${contacto.telefono}.${
+          garantia ? ` Recuerda que si no acudes se podrá cobrar el ${PORCENTAJE_AUSENCIA} % de la cita (${ausencia}).` : ""
+        }</p>`
+      : tipo === "confirmacion" || tipo === "cambio"
+      ? `<p style="margin:20px 0 0;color:#4A6670;font-size:14px;line-height:1.5">Puedes cambiar o cancelar gratis hasta el <strong>${limite.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })} a las ${r.hora}</strong>.${
+          garantia
+            ? ` Si cancelas después o no acudes, se podrá cobrar el ${PORCENTAJE_AUSENCIA} % de la cita (<strong>${ausencia}</strong>) a la tarjeta que dejaste en garantía.`
+            : ""
+        }</p>`
       : "";
 
   const boton =
-    tipo !== "cancelacion"
+    tipo !== "cancelacion" && tipo !== "cobro"
       ? `<a href="${enlace}" style="display:inline-block;margin-top:24px;background:#0D7C8A;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 22px;border-radius:12px">Ver, cambiar o cancelar mi cita</a>${
           tipo === "recordatorio"
             ? `<br><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${contacto.direccion}, ${contacto.codigoPostal} ${contacto.localidad}`)}" style="display:inline-block;margin-top:12px;color:#0D7C8A;font-size:14px;font-weight:600">Cómo llegar →</a>`
@@ -140,7 +153,7 @@ export function plantillaEmail(opts: {
   const texto = [
     t.titulo,
     "",
-    t.intro.replace(/&[a-z]+;/g, ""),
+    t.intro.replace(/<[^>]+>/g, "").replace(/&[a-z]+;/g, ""),
     "",
     `Especialidad: ${opts.especialidad}`,
     `Día: ${fechaLarga(r.fecha)}`,
@@ -149,7 +162,7 @@ export function plantillaEmail(opts: {
     `Dónde: ${contacto.direccion}, ${contacto.codigoPostal} ${contacto.localidad}`,
     `Código: ${r.id}`,
     "",
-    tipo !== "cancelacion" ? `Gestiona tu cita: ${enlace}` : "",
+    tipo !== "cancelacion" && tipo !== "cobro" ? `Gestiona tu cita: ${enlace}` : "",
     `Teléfono: ${contacto.telefono}`,
   ].join("\n");
 
@@ -186,7 +199,7 @@ function ics(r: FilaReserva, especialidad: string, duracionMin: number, enlace: 
  * Envía un email sobre una reserva. La confirmación solo se envía una vez
  * aunque se llame varias (vuelta del pago + webhook, recargas…).
  */
-export async function enviarEmailCita(tipo: TipoEmail, reservaId: string, origen: string, extra?: { reembolso?: boolean }) {
+export async function enviarEmailCita(tipo: TipoEmail, reservaId: string, origen: string, extra?: { tarde?: boolean }) {
   if (!hayEmail()) return false;
   try {
     const sb = supabaseAdmin();
@@ -215,7 +228,7 @@ export async function enviarEmailCita(tipo: TipoEmail, reservaId: string, origen
     const enlace = `${base}/mi-zona/cita/${r.token_acceso}`;
 
     const { asunto, html, texto } = plantillaEmail({
-      tipo, r, especialidad, duracionMin, profesional: prof?.nombre ?? "", enlace, reembolso: extra?.reembolso,
+      tipo, r, especialidad, duracionMin, profesional: prof?.nombre ?? "", enlace, tarde: extra?.tarde,
     });
 
     const { error } = await new Resend(process.env.RESEND_API_KEY).emails.send({
@@ -226,7 +239,7 @@ export async function enviarEmailCita(tipo: TipoEmail, reservaId: string, origen
       html,
       text: texto,
       attachments:
-        tipo === "cancelacion" || tipo === "recordatorio"
+        tipo === "cancelacion" || tipo === "recordatorio" || tipo === "cobro"
           ? undefined
           : [{ filename: `cita-${r.id}.ics`, content: Buffer.from(ics(r, especialidad, duracionMin, enlace)).toString("base64") }],
     });

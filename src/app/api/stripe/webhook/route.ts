@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
-import { aplicarSesionPagada } from "@/lib/servidor/pagos";
+import { aplicarSesionGarantia } from "@/lib/servidor/pagos";
 import { clienteStripe } from "@/lib/servidor/stripe";
 
 /**
  * Avisos de Stripe. Garantiza que la cita se confirma aunque el paciente
- * cierre el navegador justo después de pagar.
+ * cierre el navegador justo después de guardar la tarjeta.
  */
 export async function POST(req: Request) {
   const stripe = clienteStripe();
@@ -20,8 +20,8 @@ export async function POST(req: Request) {
   }
 
   try {
-    if (evento.type === "checkout.session.completed" || evento.type === "checkout.session.async_payment_succeeded") {
-      await aplicarSesionPagada(evento.data.object as Stripe.Checkout.Session, new URL(req.url).origin);
+    if (evento.type === "checkout.session.completed") {
+      await aplicarSesionGarantia(evento.data.object as Stripe.Checkout.Session, new URL(req.url).origin);
     }
     // checkout.session.expired: no hace falta nada, el hueco se libera solo
     return NextResponse.json({ recibido: true });
