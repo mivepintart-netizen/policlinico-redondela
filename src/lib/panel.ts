@@ -68,7 +68,8 @@ export const cobroAusencia = (r: ReservaPanel) => (r.cobrado !== null && !r.cobr
 
 /** ¿Se puede cobrar el 50 % a esta reserva? */
 export const sePuedeCobrar = (r: ReservaPanel) =>
-  !!r.tarjeta && cobroAusencia(r) === 0 && (r.estado === "no_presentado" || (r.estado === "cancelada" && r.canceladaTarde));
+  // Una vez cobrado (aunque luego se devolviera) no se vuelve a ofrecer el cobro
+  !!r.tarjeta && r.cobrado === null && (r.estado === "no_presentado" || (r.estado === "cancelada" && r.canceladaTarde));
 
 /* ----- Conversión desde/hacia la base de datos ----- */
 

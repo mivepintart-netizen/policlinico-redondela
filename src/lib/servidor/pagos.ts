@@ -150,7 +150,7 @@ export async function cobrarAusencia(reservaId: string, origen: string) {
   if (!d) throw new ErrorPago("Cita no encontrada", 404);
   if (!(d.estado === "no_presentado" || (d.estado === "cancelada" && d.cancelada_tarde)))
     throw new ErrorPago("Solo se cobra si el paciente no se presentó o canceló con menos de 24 h.", 409);
-  if (d.cobro_ref && !d.cobro_devuelto) throw new ErrorPago("Esta cita ya está cobrada.", 409);
+  if (d.cobro_ref) throw new ErrorPago(d.cobro_devuelto ? "Este cobro ya se devolvió." : "Esta cita ya está cobrada.", 409);
   if (!d.garantia_metodo || !d.garantia_cliente) throw new ErrorPago("Esta cita no tiene tarjeta guardada.", 409);
 
   const importe = importeAusencia(d.precio);
